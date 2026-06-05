@@ -158,8 +158,44 @@ export class AgentCore {
           required: ['role', 'taskPrompt']
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'patch_file',
+        description: 'Apply search-and-replace patches to a file. Highly preferred over write_file for editing existing files.',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              description: 'The relative path of the file to edit'
+            },
+            patches: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  find: {
+                    type: 'string',
+                    description: 'The exact block of code to find (including whitespace and indentation)'
+                  },
+                  replace: {
+                    type: 'string',
+                    description: 'The block of code to replace the "find" block with'
+                  }
+                },
+                required: ['find', 'replace']
+              },
+              description: 'List of search-and-replace patches to apply sequentially'
+            }
+          },
+          required: ['path', 'patches']
+        }
+      }
     }
   ];
+
 
 
 
@@ -654,6 +690,99 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
         return `Successfully wrote content to ${filePath}`;
       }
 
+      case 'patch_file': {
+        const filePath = args.path;
+        const patches = args.patches;
+        if (!filePath || !patches || !Array.isArray(patches)) {
+          throw new Error('Missing path or patches parameter');
+        }
+        const resolvedPath = this.resolveWorkspacePath(filePath);
+
+        this.consecutiveReadsCount = 0;
+
+        // Write-Only-After-Read Lock check
+        if (!this.readFiles.has(resolvedPath)) {
+          throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${filePath}" before you can patch it.`);
+        }
+
+        const exists = await this.fs.exists(resolvedPath);
+        if (!exists) {
+          throw new Error(`File not found at path: ${filePath}`);
+        }
+
+        let oldContent = await this.fs.readFile(resolvedPath);
+        let content = oldContent;
+
+        // Apply search-and-replace patches
+        for (let idx = 0; idx < patches.length; idx++) {
+          const patch = patches[idx];
+          const { find, replace } = patch;
+          if (find === undefined || replace === undefined) {
+            throw new Error(`Invalid patch at index ${idx}: find/replace is undefined`);
+          }
+
+          // Count occurrences
+          const occurrences = content.split(find).length - 1;
+          if (occurrences === 0) {
+            throw new Error(`Patch failed at index ${idx}: The text to find was not found in the file.`);
+          }
+          if (occurrences > 1) {
+            throw new Error(`Patch failed at index ${idx}: The text to find is not unique (found ${occurrences} times).`);
+          }
+
+          // Apply replacement
+          content = content.replace(find, replace);
+        }
+
+        if (this.hooks.beforeWriteFile) {
+          const hookResult = await this.hooks.beforeWriteFile({
+            sessionId: this.sessionId || 'unknown',
+            workspaceRoot: this.workspaceRoot,
+            path: filePath,
+            content
+          });
+          if (hookResult?.cancel) {
+            throw new Error(`Patch operation for file "${filePath}" was cancelled by hook.`);
+          }
+          if (hookResult?.content !== undefined) {
+            content = hookResult.content;
+          }
+        }
+
+        const diffs = DiffEngine.compare(oldContent, content);
+        const coloredDiff = DiffEngine.renderColorDiff(diffs);
+
+        if (this.terminalIo) {
+          this.terminalIo.write(`\n\x1b[36mProposed changes for ${filePath} via patching:\x1b[0m\n`);
+          this.terminalIo.write(coloredDiff);
+          
+          const confirm = await this.terminalIo.askConfirm(`Approve writing changes to ${filePath}?`, false);
+          if (!confirm) {
+            throw new Error(`User rejected changes to "${filePath}".`);
+          }
+        }
+
+        let writeSuccess = true;
+        try {
+          await this.fs.writeFile(resolvedPath, content);
+          this.hasModifiedFiles = true;
+        } catch (e) {
+          writeSuccess = false;
+          throw e;
+        } finally {
+          if (this.hooks.afterWriteFile) {
+            await this.hooks.afterWriteFile({
+              sessionId: this.sessionId || 'unknown',
+              workspaceRoot: this.workspaceRoot,
+              path: filePath,
+              content,
+              success: writeSuccess
+            });
+          }
+        }
+
+        return `Successfully applied ${patches.length} patches to ${filePath}`;
+      }
 
       case 'execute_command': {
         let command = args.command;
