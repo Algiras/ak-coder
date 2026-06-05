@@ -13,6 +13,8 @@ import { McpClient } from './mcp';
 import { CommandSafetyGate } from './safety';
 import { DiffEngine } from './diff';
 import { AgentHooks } from './hooks';
+import { VectorStore } from './vector-store';
+import { WorkspaceIndexer } from './indexer';
 import { z } from 'zod';
 
 export interface CoreToolDefinition<TSchema extends z.ZodObject<any> = z.ZodObject<any>> {
@@ -102,6 +104,8 @@ export class AgentCore {
   private hasExecutedTests = false;
 
   private coreTools = new Map<string, CoreToolDefinition>();
+  private vectorStore = new VectorStore();
+  private indexer = new WorkspaceIndexer(this.vectorStore);
 
   constructor(
     private fs: FileSystem,
@@ -545,6 +549,53 @@ Provide a direct and detailed technical summary of your findings or implementati
         return `[Sub-Agent "${role}" finished execution]
 Summary of Findings:
 ${response.text}`;
+      }
+    });
+
+    this.coreTools.set('index_workspace', {
+      name: 'index_workspace',
+      description: 'Index the workspace files for semantic search. Call this once before using semantic_search. Respects .gitignore patterns.',
+      schema: z.object({
+        extensions: z.array(z.string()).optional().describe('File extensions to include (e.g. [".ts", ".md"]). Defaults to common code/text extensions.')
+      }),
+      handler: async (args) => {
+        const opts = args.extensions ? { extensions: args.extensions } : {};
+        const indexer = new WorkspaceIndexer(this.vectorStore, opts);
+        // Replace the instance-level indexer so future embedQuery uses same vocab
+        (this as any).indexer = indexer;
+        await indexer.indexWorkspace(this.fs, this.workspaceRoot);
+        const fileCount = this.vectorStore.indexedFiles().length;
+        const chunkCount = this.vectorStore.size();
+        return `Indexed ${fileCount} files into ${chunkCount} chunks. Semantic search is now ready.`;
+      }
+    });
+
+    this.coreTools.set('semantic_search', {
+      name: 'semantic_search',
+      description: 'Search the indexed workspace for files or code chunks semantically relevant to a query. Call index_workspace first.',
+      schema: z.object({
+        query: z.string().describe('Natural language query, e.g. "where do we handle JSON-RPC messages"'),
+        topK: z.number().optional().describe('Maximum number of results to return (default 5)'),
+        minScore: z.number().optional().describe('Minimum cosine similarity threshold 0–1 (default 0.1)')
+      }),
+      handler: async (args) => {
+        if (this.vectorStore.size() === 0) {
+          return 'The workspace index is empty. Please run the index_workspace tool first.';
+        }
+        const queryVec = this.indexer.embedQuery(args.query);
+        const results = this.vectorStore.search(
+          queryVec,
+          args.topK ?? 5,
+          args.minScore ?? 0.1
+        );
+        if (results.length === 0) {
+          return `No results found for query: "${args.query}" (try lowering minScore or re-indexing).`;
+        }
+        return results
+          .map((r, i) =>
+            `[${i + 1}] ${r.filePath} (lines ${r.startLine + 1}–${r.endLine + 1}) | score: ${r.score.toFixed(4)}\n${r.text.slice(0, 300)}${r.text.length > 300 ? '…' : ''}`
+          )
+          .join('\n\n---\n\n');
       }
     });
   }

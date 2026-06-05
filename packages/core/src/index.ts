@@ -10,5 +10,7 @@ export * from './agent';
 export * from './safety';
 export * from './diff';
 export * from './hooks';
+export * from './vector-store';
+export * from './indexer';
 
 
