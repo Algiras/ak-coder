@@ -90,6 +90,109 @@ async function run() {
     await core.loadMcpServers(config.mcpServers);
   }
 
+  // Register file-based hooks if they exist in the project directory
+  const hooksDir = path.join(workspaceRoot, '.ak-coder', 'hooks');
+  const registerCliHooks = async () => {
+    const hooks: any = {};
+
+    const beforeWritePath = path.join(hooksDir, 'before-write');
+    if (await nfs.exists(beforeWritePath)) {
+      hooks.beforeWriteFile = async (ctx: any) => {
+        try {
+          const res = await npr.run(`"${beforeWritePath}"`, {
+            cwd: workspaceRoot,
+            env: {
+              ...process.env,
+              AK_CODER_FILE_PATH: ctx.path,
+              AK_CODER_FILE_CONTENT: ctx.content,
+              AK_CODER_SESSION_ID: ctx.sessionId
+            }
+          });
+          if (res.code !== 0) {
+            return { cancel: true };
+          }
+          const trimmedStdout = res.stdout.trim();
+          if (trimmedStdout) {
+            return { content: trimmedStdout };
+          }
+        } catch (e) {
+          nio.writeError(`Hook before-write failed to execute: ${(e as Error).message}\n`);
+        }
+      };
+    }
+
+    const afterWritePath = path.join(hooksDir, 'after-write');
+    if (await nfs.exists(afterWritePath)) {
+      hooks.afterWriteFile = async (ctx: any) => {
+        try {
+          await npr.run(`"${afterWritePath}"`, {
+            cwd: workspaceRoot,
+            env: {
+              ...process.env,
+              AK_CODER_FILE_PATH: ctx.path,
+              AK_CODER_FILE_CONTENT: ctx.content,
+              AK_CODER_SESSION_ID: ctx.sessionId,
+              AK_CODER_WRITE_SUCCESS: String(ctx.success)
+            }
+          });
+        } catch (e) {
+          nio.writeError(`Hook after-write failed to execute: ${(e as Error).message}\n`);
+        }
+      };
+    }
+
+    const beforeCommandPath = path.join(hooksDir, 'before-command');
+    if (await nfs.exists(beforeCommandPath)) {
+      hooks.beforeExecuteCommand = async (ctx: any) => {
+        try {
+          const res = await npr.run(`"${beforeCommandPath}"`, {
+            cwd: workspaceRoot,
+            env: {
+              ...process.env,
+              AK_CODER_COMMAND: ctx.command,
+              AK_CODER_SESSION_ID: ctx.sessionId
+            }
+          });
+          if (res.code !== 0) {
+            return { cancel: true };
+          }
+          const trimmedStdout = res.stdout.trim();
+          if (trimmedStdout) {
+            return { command: trimmedStdout };
+          }
+        } catch (e) {
+          nio.writeError(`Hook before-command failed to execute: ${(e as Error).message}\n`);
+        }
+      };
+    }
+
+    const afterCommandPath = path.join(hooksDir, 'after-command');
+    if (await nfs.exists(afterCommandPath)) {
+      hooks.afterExecuteCommand = async (ctx: any) => {
+        try {
+          await npr.run(`"${afterCommandPath}"`, {
+            cwd: workspaceRoot,
+            env: {
+              ...process.env,
+              AK_CODER_COMMAND: ctx.command,
+              AK_CODER_SESSION_ID: ctx.sessionId,
+              AK_CODER_COMMAND_CODE: String(ctx.code),
+              AK_CODER_COMMAND_STDOUT: ctx.stdout,
+              AK_CODER_COMMAND_STDERR: ctx.stderr
+            }
+          });
+        } catch (e) {
+          nio.writeError(`Hook after-command failed to execute: ${(e as Error).message}\n`);
+        }
+      };
+    }
+
+    core.registerHooks(hooks);
+  };
+
+  await registerCliHooks();
+
+
   if (args.includes('init')) {
     // Run setup bootstrap
     nio.write('\x1b[36mInitializing ak-coder workspace...\x1b[0m');

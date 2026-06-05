@@ -12,6 +12,7 @@ import { IgnoreMatcher } from './ignore';
 import { McpClient } from './mcp';
 import { CommandSafetyGate } from './safety';
 import { DiffEngine } from './diff';
+import { AgentHooks } from './hooks';
 
 export class AgentCore {
   private messages: ChatMessage[] = [];
@@ -28,6 +29,10 @@ export class AgentCore {
   private readFiles = new Set<string>();
   private mcpClients = new Map<string, McpClient>();
   private safetyGate: CommandSafetyGate;
+  private hooks: AgentHooks = {};
+  public delegationDepth = 0;
+
+
 
   // Heuristics session states
   private consecutiveReadsCount = 0;
@@ -127,8 +132,36 @@ export class AgentCore {
           required: ['pattern', 'path']
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'delegate_task',
+        description: 'Deploy a specialized sub-agent to execute a sub-task. Returns the sub-agent\'s findings.',
+        parameters: {
+          type: 'object',
+          properties: {
+            role: {
+              type: 'string',
+              description: 'The specialized role of the sub-agent (e.g. "Security Auditor", "Test Runner", "Parser Optimizer")'
+            },
+            taskPrompt: {
+              type: 'string',
+              description: 'The detailed instructions and objective of the task for the sub-agent'
+            },
+            filesToInclude: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Relative paths of files to load in the sub-agent\'s context'
+            }
+          },
+          required: ['role', 'taskPrompt']
+        }
+      }
     }
   ];
+
+
 
   constructor(
     private fs: FileSystem,
@@ -146,6 +179,11 @@ export class AgentCore {
     this.costInput = costInput;
     this.costOutput = costOutput;
   }
+
+  registerHooks(hooks: AgentHooks): void {
+    this.hooks = { ...this.hooks, ...hooks };
+  }
+
 
   async startSession(sessionId: string): Promise<void> {
     this.sessionId = sessionId;
@@ -364,7 +402,17 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
         content: systemPromptContent
       };
 
-      const payload = [systemPrompt, ...this.messages];
+      let payload = [systemPrompt, ...this.messages];
+
+      if (this.hooks.beforeChat) {
+        const hookPayload = await this.hooks.beforeChat(payload, {
+          sessionId: this.sessionId || 'unknown',
+          workspaceRoot: this.workspaceRoot
+        });
+        if (hookPayload) {
+          payload = hookPayload;
+        }
+      }
 
       const startTime = Date.now();
       this.logger.info('Calling LLM Service', { messageCount: payload.length, loopCount });
@@ -376,11 +424,22 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
         tools: combinedTools
       });
 
+      if (this.hooks.afterChat) {
+        const hookResultText = await this.hooks.afterChat(result.text, {
+          sessionId: this.sessionId || 'unknown',
+          workspaceRoot: this.workspaceRoot
+        });
+        if (hookResultText !== undefined && hookResultText !== null) {
+          result.text = hookResultText;
+        }
+      }
+
       const latencyMs = Date.now() - startTime;
       totalInputTokens += result.inputTokens;
       totalOutputTokens += result.outputTokens;
 
       this.logger.info('LLM Service response completed', { outputTokens: result.outputTokens, latencyMs });
+
 
       // Record Call in Session Store
       const currentCost = (result.inputTokens * this.costInput + result.outputTokens * this.costOutput) / 1000000;
@@ -527,7 +586,7 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
 
       case 'write_file': {
         const filePath = args.path;
-        const content = args.content;
+        let content = args.content;
         if (!filePath || content === undefined) {
           throw new Error('Missing path or content parameter');
         }
@@ -538,6 +597,21 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
         // Write-Only-After-Read Lock check
         if (!this.readFiles.has(resolvedPath)) {
           throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${filePath}" before you can write to it.`);
+        }
+
+        if (this.hooks.beforeWriteFile) {
+          const hookResult = await this.hooks.beforeWriteFile({
+            sessionId: this.sessionId || 'unknown',
+            workspaceRoot: this.workspaceRoot,
+            path: filePath,
+            content
+          });
+          if (hookResult?.cancel) {
+            throw new Error(`Write operation for file "${filePath}" was cancelled by hook.`);
+          }
+          if (hookResult?.content !== undefined) {
+            content = hookResult.content;
+          }
         }
 
         let oldContent = '';
@@ -558,20 +632,51 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
           }
         }
 
-        await this.fs.writeFile(resolvedPath, content);
-        this.hasModifiedFiles = true;
+        let writeSuccess = true;
+        try {
+          await this.fs.writeFile(resolvedPath, content);
+          this.hasModifiedFiles = true;
+        } catch (e) {
+          writeSuccess = false;
+          throw e;
+        } finally {
+          if (this.hooks.afterWriteFile) {
+            await this.hooks.afterWriteFile({
+              sessionId: this.sessionId || 'unknown',
+              workspaceRoot: this.workspaceRoot,
+              path: filePath,
+              content,
+              success: writeSuccess
+            });
+          }
+        }
 
         return `Successfully wrote content to ${filePath}`;
       }
 
+
       case 'execute_command': {
-        const command = args.command;
+        let command = args.command;
         if (!command) throw new Error('Missing command parameter');
 
         this.consecutiveReadsCount = 0;
 
         if (!this.processRunner) {
           throw new Error('ProcessRunner is not registered in the agent context');
+        }
+
+        if (this.hooks.beforeExecuteCommand) {
+          const hookResult = await this.hooks.beforeExecuteCommand({
+            sessionId: this.sessionId || 'unknown',
+            workspaceRoot: this.workspaceRoot,
+            command
+          });
+          if (hookResult?.cancel) {
+            throw new Error(`Command execution was cancelled by hook: "${command}"`);
+          }
+          if (hookResult?.command !== undefined) {
+            command = hookResult.command;
+          }
         }
 
         const safety = this.safetyGate.classifyCommand(command);
@@ -594,14 +699,41 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
           }
         }
 
-        const result = await this.processRunner.run(command, { cwd: this.workspaceRoot });
+        let runResult: any;
+        try {
+          runResult = await this.processRunner.run(command, { cwd: this.workspaceRoot });
+        } catch (e) {
+          if (this.hooks.afterExecuteCommand) {
+            await this.hooks.afterExecuteCommand({
+              sessionId: this.sessionId || 'unknown',
+              workspaceRoot: this.workspaceRoot,
+              command,
+              code: null,
+              stdout: '',
+              stderr: (e as Error).message
+            });
+          }
+          throw e;
+        }
+
+        if (this.hooks.afterExecuteCommand) {
+          await this.hooks.afterExecuteCommand({
+            sessionId: this.sessionId || 'unknown',
+            workspaceRoot: this.workspaceRoot,
+            command,
+            code: runResult.code,
+            stdout: runResult.stdout,
+            stderr: runResult.stderr
+          });
+        }
 
         if (command.toLowerCase().includes('test')) {
           this.hasExecutedTests = true;
         }
 
-        return `Exit Code: ${result.code}\nStdout:\n${result.stdout}\nStderr:\n${result.stderr}`;
+        return `Exit Code: ${runResult.code}\nStdout:\n${runResult.stdout}\nStderr:\n${runResult.stderr}`;
       }
+
 
       case 'list_directory': {
         const dirPath = args.path || '.';
@@ -665,6 +797,69 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
           return `No matches found for pattern: ${pattern}`;
         }
         return matches.slice(0, 100).join('\n');
+      }
+
+      case 'delegate_task': {
+        const { role, taskPrompt, filesToInclude } = args;
+        if (!role || !taskPrompt) {
+          throw new Error('Missing role or taskPrompt parameter');
+        }
+
+        const maxDepth = 3;
+        if (this.delegationDepth >= maxDepth) {
+          throw new Error(`Sub-agent delegation depth limit of ${maxDepth} exceeded. Spawning rejected.`);
+        }
+
+        const subSessionId = `${this.sessionId || 'sub'}-depth-${this.delegationDepth + 1}-${Date.now()}`;
+        const childAgent = new AgentCore(
+          this.fs,
+          this.llm,
+          this.store,
+          this.logger,
+          this.processRunner,
+          this.terminalIo,
+          this.workspaceRoot
+        );
+        childAgent.delegationDepth = this.delegationDepth + 1;
+        childAgent.setPricing(this.costInput, this.costOutput);
+
+        // Instruct child agent with its specialized system rules
+        childAgent.agentsRules = `You are a specialized sub-agent with the role: "${role}".
+Your parent task instruction is:
+${taskPrompt}
+
+Provide a direct and detailed technical summary of your findings or implementation when you are done.`;
+
+        // Inject files into child's context if requested
+        if (filesToInclude && Array.isArray(filesToInclude)) {
+          for (const file of filesToInclude) {
+            try {
+              const resolved = this.resolveWorkspacePath(file);
+              await childAgent.addFileToContext(resolved);
+            } catch (e) {
+              this.logger.warn(`Failed to add file to child context: ${file}`, e);
+            }
+          }
+        }
+
+        await childAgent.startSession(subSessionId);
+
+        if (this.terminalIo) {
+          this.terminalIo.write(`\n\x1b[35m[Spawning Sub-Agent: "${role}" at depth ${childAgent.delegationDepth}...]\x1b[0m\n`);
+        }
+
+        // Run child loop by sending task prompt
+        const response = await childAgent.processMessage(
+          `Begin task: "${taskPrompt}"`
+        );
+
+        if (this.terminalIo) {
+          this.terminalIo.write(`\n\x1b[35m[Sub-Agent "${role}" finished execution]\x1b[0m\n`);
+        }
+
+        return `[Sub-Agent "${role}" finished execution]
+Summary of Findings:
+${response.text}`;
       }
 
       default:

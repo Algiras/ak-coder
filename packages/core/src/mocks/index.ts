@@ -60,13 +60,16 @@ export class MockTerminalIo implements TerminalIo {
 
 export class MockProcessRunner implements ProcessRunner {
   public mockOutputs = new Map<string, { code: number; stdout: string; stderr: string }>();
+  public commands: string[] = [];
 
-  async run(command: string, options?: { cwd?: string; timeout?: number }): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  async run(command: string, options?: { cwd?: string; timeout?: number; env?: Record<string, string> }): Promise<{ code: number | null; stdout: string; stderr: string }> {
+    this.commands.push(command);
     const mock = this.mockOutputs.get(command);
     if (mock) return mock;
     return { code: 0, stdout: `Executed: ${command}`, stderr: '' };
   }
 }
+
 
 export class MockLlmService implements LLMService {
   public mockResponse = 'Hello from Mock LLM';

@@ -1,10 +1,69 @@
 import * as readline from 'readline';
+import { z } from 'zod';
 
-export interface ToolDefinition {
+export interface ToolDefinition<TSchema extends z.ZodObject<any> = z.ZodObject<any>> {
   name: string;
   description: string;
-  handler: (args: any) => Promise<any> | any;
+  schema: TSchema;
+  handler: (args: z.infer<TSchema>) => Promise<any> | any;
 }
+
+function zodToJsonSchema(schema: z.ZodTypeAny): any {
+  const description = schema.description;
+
+  if (schema instanceof z.ZodObject) {
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+    const shape = schema.shape;
+    for (const [key, propSchema] of Object.entries(shape)) {
+      properties[key] = zodToJsonSchema(propSchema as z.ZodTypeAny);
+      if (!(propSchema instanceof z.ZodOptional) && !(propSchema instanceof z.ZodNullable)) {
+        required.push(key);
+      }
+    }
+    return {
+      type: 'object',
+      properties,
+      ...(required.length > 0 ? { required } : {})
+    };
+  }
+
+  if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
+    const unwrappedSchema = zodToJsonSchema(schema.unwrap());
+    if (description && !unwrappedSchema.description) {
+      unwrappedSchema.description = description;
+    }
+    return unwrappedSchema;
+  }
+
+  let typeStr = 'string';
+
+  if (schema instanceof z.ZodString) {
+    typeStr = 'string';
+  } else if (schema instanceof z.ZodNumber) {
+    typeStr = 'number';
+  } else if (schema instanceof z.ZodBoolean) {
+    typeStr = 'boolean';
+  } else if (schema instanceof z.ZodEnum) {
+    return {
+      type: 'string',
+      enum: schema.options,
+      ...(description ? { description } : {})
+    };
+  } else if (schema instanceof z.ZodArray) {
+    return {
+      type: 'array',
+      items: zodToJsonSchema(schema.element),
+      ...(description ? { description } : {})
+    };
+  }
+
+  return {
+    type: typeStr,
+    ...(description ? { description } : {})
+  };
+}
+
 
 export class PluginSDK {
   private tools = new Map<string, ToolDefinition>();
@@ -17,7 +76,7 @@ export class PluginSDK {
     };
   }
 
-  registerTool(tool: ToolDefinition): void {
+  registerTool<TSchema extends z.ZodObject<any>>(tool: ToolDefinition<TSchema>): void {
     this.tools.set(tool.name, tool);
   }
 
@@ -38,7 +97,7 @@ export class PluginSDK {
           const toolSchemas = Array.from(this.tools.values()).map(t => ({
             name: t.name,
             description: t.description,
-            inputSchema: { type: 'object', properties: {} } // Simplified for mock/basic plugins
+            inputSchema: zodToJsonSchema(t.schema)
           }));
 
           this.sendResponse(req.id, {
@@ -54,8 +113,17 @@ export class PluginSDK {
             return;
           }
 
+          const parsedArgs = tool.schema.safeParse(args);
+          if (!parsedArgs.success) {
+            const formattedErrors = parsedArgs.error.issues
+              .map(e => `${e.path.join('.')}: ${e.message}`)
+              .join(', ');
+            this.sendError(req.id, -32602, `Invalid params: ${formattedErrors}`);
+            return;
+          }
+
           try {
-            const result = await tool.handler(args);
+            const result = await tool.handler(parsedArgs.data);
             this.sendResponse(req.id, result);
           } catch (e) {
             this.sendError(req.id, -32000, (e as Error).message);

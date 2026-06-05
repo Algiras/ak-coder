@@ -15,8 +15,9 @@ export interface TerminalIo {
 }
 
 export interface ProcessRunner {
-  run(command: string, options?: { cwd?: string; timeout?: number }): Promise<{ code: number | null; stdout: string; stderr: string }>;
+  run(command: string, options?: { cwd?: string; timeout?: number; env?: Record<string, string> }): Promise<{ code: number | null; stdout: string; stderr: string }>;
 }
+
 
 export interface ToolDefinition {
   type: 'function';

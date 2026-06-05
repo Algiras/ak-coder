@@ -2,7 +2,7 @@ import { ProcessRunner } from '@ak-coder/core';
 import { exec } from 'child_process';
 
 export class NodeProcessRunner implements ProcessRunner {
-  run(command: string, options?: { cwd?: string; timeout?: number }): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  run(command: string, options?: { cwd?: string; timeout?: number; env?: Record<string, string> }): Promise<{ code: number | null; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
       const timeoutMs = options?.timeout ?? 300000; // default 5 minutes
       const child = exec(
@@ -10,7 +10,8 @@ export class NodeProcessRunner implements ProcessRunner {
         {
           cwd: options?.cwd,
           timeout: timeoutMs,
-          maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+          env: options?.env ? { ...process.env, ...options.env } : process.env
         },
         (error, stdout, stderr) => {
           if (error) {

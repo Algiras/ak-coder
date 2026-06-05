@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { PluginSDK } from '../src';
-import { Readable, Writable } from 'stream';
-import * as readline from 'readline';
+import { Readable } from 'stream';
+import { z } from 'zod';
 
-describe('PluginSDK JSON-RPC Flow', () => {
+describe('PluginSDK Zod Flow', () => {
   let originalStdoutWrite: any;
   let stdoutData: string[] = [];
 
@@ -20,67 +20,70 @@ describe('PluginSDK JSON-RPC Flow', () => {
     process.stdout.write = originalStdoutWrite;
   });
 
-  it('should register tools and respond to initialize handshake', async () => {
+  it('should register tool, generate schema, and validate params using Zod', async () => {
     const sdk = new PluginSDK();
+    
+    // Register tool with Zod schema
     sdk.registerTool({
-      name: 'hello_world',
-      description: 'greets the user',
-      handler: (args) => ({ greeting: `Hello ${args.name || 'World'}` })
+      name: 'greet_user',
+      description: 'Greets the user with their name and age',
+      schema: z.object({
+        name: z.string().describe('The name of the user'),
+        age: z.number().optional().describe('The age of the user')
+      }),
+      handler: (args) => ({
+        message: `Hello ${args.name}! You are ${args.age || 'of unknown'} years old.`
+      })
     });
 
-    // Mock stdin stream
+    // Mock stdin
     const mockStdin = new Readable({
       read() {}
     });
 
-    // Override the start method locally to use our custom mock stream
-    const rl = readline.createInterface({
-      input: mockStdin,
-      output: process.stdout,
-      terminal: false
+    // Override process.stdin to use our mockStdin
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', {
+      value: mockStdin,
+      writable: true,
+      configurable: true
     });
 
-    rl.on('line', async (line) => {
-      const parsed = JSON.parse(line);
-      if (parsed.method === 'initialize') {
-        const payload = {
-          jsonrpc: '2.0',
-          id: parsed.id,
-          result: {
-            tools: [{ name: 'hello_world', description: 'greets the user', inputSchema: { type: 'object', properties: {} } }]
-          }
-        };
-        process.stdout.write(JSON.stringify(payload) + '\n');
-      } else if (parsed.method === 'tools/call') {
-        process.stdout.write(JSON.stringify({
-          jsonrpc: '2.0',
-          id: parsed.id,
-          result: { greeting: 'Hello Test' }
-        }) + '\n');
-      }
-    });
+    sdk.start();
 
-    // Send initialize request
+    // 1. Test Handshake (initialize)
     mockStdin.push(JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
       method: 'initialize'
     }) + '\n');
 
-    // Wait briefly for event loop
     await new Promise(resolve => setTimeout(resolve, 20));
 
     expect(stdoutData).toHaveLength(1);
     const initRes = JSON.parse(stdoutData[0].trim());
     expect(initRes.id).toBe(1);
-    expect(initRes.result.tools[0].name).toBe('hello_world');
+    expect(initRes.result.tools[0].name).toBe('greet_user');
+    
+    // Check if the Zod schema was converted to JSON schema correctly
+    const schema = initRes.result.tools[0].inputSchema;
+    expect(schema.type).toBe('object');
+    expect(schema.properties.name.type).toBe('string');
+    expect(schema.properties.name.description).toBe('The name of the user');
+    expect(schema.properties.age.type).toBe('number');
+    expect(schema.properties.age.description).toBe('The age of the user');
+    expect(schema.required).toContain('name');
+    expect(schema.required).not.toContain('age');
 
-    // Send tool call request
+    // 2. Test valid tool call
     mockStdin.push(JSON.stringify({
       jsonrpc: '2.0',
       id: 2,
       method: 'tools/call',
-      params: { name: 'hello_world', arguments: { name: 'Test' } }
+      params: {
+        name: 'greet_user',
+        arguments: { name: 'Alice', age: 25 }
+      }
     }) + '\n');
 
     await new Promise(resolve => setTimeout(resolve, 20));
@@ -88,8 +91,34 @@ describe('PluginSDK JSON-RPC Flow', () => {
     expect(stdoutData).toHaveLength(2);
     const callRes = JSON.parse(stdoutData[1].trim());
     expect(callRes.id).toBe(2);
-    expect(callRes.result.greeting).toBe('Hello Test');
+    expect(callRes.result.message).toBe('Hello Alice! You are 25 years old.');
 
-    rl.close();
+    // 3. Test invalid tool call (fails Zod schema validation)
+    mockStdin.push(JSON.stringify({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'greet_user',
+        arguments: { age: 'not-a-number' } // missing 'name', wrong type for 'age'
+      }
+    }) + '\n');
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(stdoutData).toHaveLength(3);
+    const errRes = JSON.parse(stdoutData[2].trim());
+    expect(errRes.id).toBe(3);
+    expect(errRes.error).toBeDefined();
+    expect(errRes.error.code).toBe(-32602); // Invalid params
+    expect(errRes.error.message).toContain('name'); // should complain about missing name
+    expect(errRes.error.message).toContain('age');  // should complain about wrong type for age
+
+    // Restore process.stdin
+    Object.defineProperty(process, 'stdin', {
+      value: originalStdin,
+      writable: true,
+      configurable: true
+    });
   });
 });
