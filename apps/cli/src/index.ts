@@ -4,7 +4,8 @@ import {
   ConfigManager,
   FileSessionStore,
   FileLogger,
-  OpenAICompatibleLLMService
+  OpenAICompatibleLLMService,
+  DockerProcessRunner
 } from '@ak-coder/core';
 import { NodeFileSystem } from './adapters/filesystem';
 import { NodeTerminalIo } from './adapters/terminal';
@@ -37,10 +38,27 @@ async function run() {
   // Initialize Core Adapters
   const nfs = new NodeFileSystem();
   const nio = new NodeTerminalIo();
-  const npr = new NodeProcessRunner();
 
   // Check command line flags
   const args = process.argv.slice(2);
+
+  // Sandbox flag: --sandbox [--sandbox-image <image>] [--sandbox-readonly]
+  const sandboxEnabled = args.includes('--sandbox');
+  const sandboxImageIdx = args.indexOf('--sandbox-image');
+  const sandboxImage = sandboxImageIdx !== -1 ? args[sandboxImageIdx + 1] : undefined;
+  const sandboxReadOnly = args.includes('--sandbox-readonly');
+
+  const npr = sandboxEnabled
+    ? new DockerProcessRunner({
+        workspaceRoot,
+        image: sandboxImage,
+        readOnly: sandboxReadOnly
+      })
+    : new NodeProcessRunner();
+
+  if (sandboxEnabled && !args.includes('--stdio') && process.stdin.isTTY) {
+    nio.write(`\x1b[35m[Sandbox Mode] Commands will run inside Docker (${sandboxImage ?? 'node:20-alpine'})${sandboxReadOnly ? ' [read-only workspace]' : ''}\x1b[0m\n`);
+  }
 
   // Load config
   const configManager = new ConfigManager(nfs, path.join(globalConfigDir, 'config.json'));
@@ -230,7 +248,35 @@ async function run() {
   // Default: Start Interactive REPL
   await core.startSession('session-' + Date.now());
 
-  nio.write('\x1b[35mWelcome to ak-coder REPL!\x1b[0m Type /help for assistance, or /exit to quit.\n');
+  // ── Startup Banner ────────────────────────────────────────────────────────
+  const pkgVersion = '0.1.0';
+  const modelName = config.model || 'unknown';
+  const truncatedRoot = workspaceRoot.length > 52
+    ? '\u2026' + workspaceRoot.slice(-51)
+    : workspaceRoot;
+  const sandboxBannerLine = sandboxEnabled
+    ? `\x1b[38;5;141m  \u29E1 Sandbox   \x1b[0m\x1b[90mDocker (${sandboxImage ?? 'node:20-alpine'})${sandboxReadOnly ? ' [read-only]' : ''}\x1b[0m\n`
+    : '';
+
+  nio.write(
+    '\n' +
+    '\x1b[38;5;99m   \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557  \u2588\u2588\u2557      \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \x1b[0m\n' +
+    '\x1b[38;5;99m   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551 \u2588\u2588\u2554\u255D     \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\x1b[0m\n' +
+    '\x1b[38;5;135m   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2554\u255D      \u2588\u2588\u2551     \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\x1b[0m\n' +
+    '\x1b[38;5;135m   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2588\u2588\u2557      \u2588\u2588\u2551     \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u255D  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\x1b[0m\n' +
+    '\x1b[38;5;141m   \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2557     \u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551\x1b[0m\n' +
+    '\x1b[38;5;141m   \u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D      \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D\x1b[0m\n' +
+    '\n' +
+    `\x1b[90m   v${pkgVersion}  \u00B7  agentic terminal coding assistant\x1b[0m\n` +
+    '\n' +
+    `\x1b[38;5;99m   \u25C6 Model     \x1b[0m\x1b[97m${modelName}\x1b[0m\n` +
+    `\x1b[38;5;99m   \u25C6 Workspace \x1b[0m\x1b[97m${truncatedRoot}\x1b[0m\n` +
+    sandboxBannerLine +
+    '\n' +
+    '\x1b[90m   Type \x1b[97m/help\x1b[90m for commands  \u00B7  \x1b[97m/exit\x1b[90m to quit  \u00B7  Ctrl+C to interrupt\x1b[0m\n' +
+    '\x1b[90m   \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1b[0m\n' +
+    '\n'
+  );
 
   while (true) {
     const prompt = await nio.ask('\x1b[32mak-coder > \x1b[0m');

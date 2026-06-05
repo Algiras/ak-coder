@@ -12,5 +12,6 @@ export * from './diff';
 export * from './hooks';
 export * from './vector-store';
 export * from './indexer';
+export * from './adapters/docker-process';
 
 
