@@ -13,6 +13,70 @@ import { McpClient } from './mcp';
 import { CommandSafetyGate } from './safety';
 import { DiffEngine } from './diff';
 import { AgentHooks } from './hooks';
+import { z } from 'zod';
+
+export interface CoreToolDefinition<TSchema extends z.ZodObject<any> = z.ZodObject<any>> {
+  name: string;
+  description: string;
+  schema: TSchema;
+  handler: (args: z.infer<TSchema>) => Promise<string> | string;
+}
+
+function zodToJsonSchema(schema: z.ZodTypeAny): any {
+  const description = schema.description;
+
+  if (schema instanceof z.ZodObject) {
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+    const shape = schema.shape;
+    for (const [key, propSchema] of Object.entries(shape)) {
+      properties[key] = zodToJsonSchema(propSchema as z.ZodTypeAny);
+      if (!(propSchema instanceof z.ZodOptional) && !(propSchema instanceof z.ZodNullable)) {
+        required.push(key);
+      }
+    }
+    return {
+      type: 'object',
+      properties,
+      ...(required.length > 0 ? { required } : {})
+    };
+  }
+
+  if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
+    const unwrappedSchema = zodToJsonSchema(schema.unwrap());
+    if (description && !unwrappedSchema.description) {
+      unwrappedSchema.description = description;
+    }
+    return unwrappedSchema;
+  }
+
+  let typeStr = 'string';
+
+  if (schema instanceof z.ZodString) {
+    typeStr = 'string';
+  } else if (schema instanceof z.ZodNumber) {
+    typeStr = 'number';
+  } else if (schema instanceof z.ZodBoolean) {
+    typeStr = 'boolean';
+  } else if (schema instanceof z.ZodEnum) {
+    return {
+      type: 'string',
+      enum: schema.options,
+      ...(description ? { description } : {})
+    };
+  } else if (schema instanceof z.ZodArray) {
+    return {
+      type: 'array',
+      items: zodToJsonSchema(schema.element),
+      ...(description ? { description } : {})
+    };
+  }
+
+  return {
+    type: typeStr,
+    ...(description ? { description } : {})
+  };
+}
 
 export class AgentCore {
   private messages: ChatMessage[] = [];
@@ -20,7 +84,7 @@ export class AgentCore {
   private summary: string | null = null;
   private sessionId: string | null = null;
   private maxContextTokens = 16000;
-  private agentsRules: string | null = null;
+  public agentsRules: string | null = null;
   private loadedSkills: { name: string; description: string; content: string }[] = [];
   private costInput = 5.0;
   private costOutput = 15.0;
@@ -32,172 +96,12 @@ export class AgentCore {
   private hooks: AgentHooks = {};
   public delegationDepth = 0;
 
-
-
   // Heuristics session states
   private consecutiveReadsCount = 0;
   private hasModifiedFiles = false;
   private hasExecutedTests = false;
 
-  private tools: ToolDefinition[] = [
-    {
-      type: 'function',
-      function: {
-        name: 'execute_command',
-        description: 'Execute a terminal shell command. Safe commands (ls, git status, git diff) run automatically. Mutating/unsafe commands require explicit user confirmation.',
-        parameters: {
-          type: 'object',
-          properties: {
-            command: {
-              type: 'string',
-              description: 'The shell command to run'
-            }
-          },
-          required: ['command']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'read_file',
-        description: 'Read the contents of a file from the workspace. You must read a file before modifying it.',
-        parameters: {
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'The relative path of the file to read'
-            }
-          },
-          required: ['path']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'write_file',
-        description: 'Write complete new content to a file. A unified diff will be shown and requires explicit user confirmation. You must read the file first in the current session before writing.',
-        parameters: {
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'The relative path of the file to write'
-            },
-            content: {
-              type: 'string',
-              description: 'The complete new content to write'
-            }
-          },
-          required: ['path', 'content']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'list_directory',
-        description: 'List the contents of a directory in the workspace.',
-        parameters: {
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'The path of the directory to list'
-            }
-          },
-          required: ['path']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'grep_search',
-        description: 'Search for text matches within workspace files.',
-        parameters: {
-          type: 'object',
-          properties: {
-            pattern: {
-              type: 'string',
-              description: 'The text pattern or regex to search for'
-            },
-            path: {
-              type: 'string',
-              description: 'The directory path to search'
-            }
-          },
-          required: ['pattern', 'path']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'delegate_task',
-        description: 'Deploy a specialized sub-agent to execute a sub-task. Returns the sub-agent\'s findings.',
-        parameters: {
-          type: 'object',
-          properties: {
-            role: {
-              type: 'string',
-              description: 'The specialized role of the sub-agent (e.g. "Security Auditor", "Test Runner", "Parser Optimizer")'
-            },
-            taskPrompt: {
-              type: 'string',
-              description: 'The detailed instructions and objective of the task for the sub-agent'
-            },
-            filesToInclude: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Relative paths of files to load in the sub-agent\'s context'
-            }
-          },
-          required: ['role', 'taskPrompt']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'patch_file',
-        description: 'Apply search-and-replace patches to a file. Highly preferred over write_file for editing existing files.',
-        parameters: {
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'The relative path of the file to edit'
-            },
-            patches: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  find: {
-                    type: 'string',
-                    description: 'The exact block of code to find (including whitespace and indentation)'
-                  },
-                  replace: {
-                    type: 'string',
-                    description: 'The block of code to replace the "find" block with'
-                  }
-                },
-                required: ['find', 'replace']
-              },
-              description: 'List of search-and-replace patches to apply sequentially'
-            }
-          },
-          required: ['path', 'patches']
-        }
-      }
-    }
-  ];
-
-
-
+  private coreTools = new Map<string, CoreToolDefinition>();
 
   constructor(
     private fs: FileSystem,
@@ -209,6 +113,440 @@ export class AgentCore {
     private workspaceRoot: string = process.cwd()
   ) {
     this.safetyGate = new CommandSafetyGate(this.fs, this.workspaceRoot);
+    this.registerCoreTools();
+  }
+
+  private registerCoreTools() {
+    this.coreTools.set('read_file', {
+      name: 'read_file',
+      description: 'Read the contents of a file from the workspace. You must read a file before modifying it.',
+      schema: z.object({
+        path: z.string().describe('The relative path of the file to read')
+      }),
+      handler: async (args) => {
+        const filePath = args.path;
+        const resolvedPath = this.resolveWorkspacePath(filePath);
+        
+        this.readFiles.add(resolvedPath);
+        
+        this.consecutiveReadsCount++;
+        if (this.consecutiveReadsCount > 5) {
+          const warnMsg = `\x1b[33m[Heuristic Alert: Agent has read ${this.consecutiveReadsCount} files consecutively without taking modifying actions.]\x1b[0m\n`;
+          if (this.terminalIo) {
+            this.terminalIo.write(warnMsg);
+          }
+        }
+
+        const exists = await this.fs.exists(resolvedPath);
+        if (!exists) {
+          return `Error: File not found at path: ${filePath}`;
+        }
+        const content = await this.fs.readFile(resolvedPath);
+        return content;
+      }
+    });
+
+    this.coreTools.set('write_file', {
+      name: 'write_file',
+      description: 'Write complete new content to a file. A unified diff will be shown and requires explicit user confirmation. You must read the file first in the current session before writing.',
+      schema: z.object({
+        path: z.string().describe('The relative path of the file to write'),
+        content: z.string().describe('The complete new content to write')
+      }),
+      handler: async (args) => {
+        const filePath = args.path;
+        let content = args.content;
+        const resolvedPath = this.resolveWorkspacePath(filePath);
+
+        this.consecutiveReadsCount = 0;
+
+        // Write-Only-After-Read Lock check
+        if (!this.readFiles.has(resolvedPath)) {
+          throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${filePath}" before you can write to it.`);
+        }
+
+        if (this.hooks.beforeWriteFile) {
+          const hookResult = await this.hooks.beforeWriteFile({
+            sessionId: this.sessionId || 'unknown',
+            workspaceRoot: this.workspaceRoot,
+            path: filePath,
+            content
+          });
+          if (hookResult?.cancel) {
+            throw new Error(`Write operation for file "${filePath}" was cancelled by hook.`);
+          }
+          if (hookResult?.content !== undefined) {
+            content = hookResult.content;
+          }
+        }
+
+        let oldContent = '';
+        if (await this.fs.exists(resolvedPath)) {
+          oldContent = await this.fs.readFile(resolvedPath);
+        }
+
+        const diffs = DiffEngine.compare(oldContent, content);
+        const coloredDiff = DiffEngine.renderColorDiff(diffs);
+
+        if (this.terminalIo) {
+          this.terminalIo.write(`\n\x1b[36mProposed changes for ${filePath}:\x1b[0m\n`);
+          this.terminalIo.write(coloredDiff);
+          
+          const confirm = await this.terminalIo.askConfirm(`Approve writing changes to ${filePath}?`, false);
+          if (!confirm) {
+            throw new Error(`User rejected changes to "${filePath}".`);
+          }
+        }
+
+        let writeSuccess = true;
+        try {
+          await this.fs.writeFile(resolvedPath, content);
+          this.hasModifiedFiles = true;
+        } catch (e) {
+          writeSuccess = false;
+          throw e;
+        } finally {
+          if (this.hooks.afterWriteFile) {
+            await this.hooks.afterWriteFile({
+              sessionId: this.sessionId || 'unknown',
+              workspaceRoot: this.workspaceRoot,
+              path: filePath,
+              content,
+              success: writeSuccess
+            });
+          }
+        }
+
+        return `Successfully wrote content to ${filePath}`;
+      }
+    });
+
+    this.coreTools.set('patch_file', {
+      name: 'patch_file',
+      description: 'Apply search-and-replace patches to a file. Highly preferred over write_file for editing existing files.',
+      schema: z.object({
+        path: z.string().describe('The relative path of the file to edit'),
+        patches: z.array(z.object({
+          find: z.string().describe('The exact block of code to find (including whitespace and indentation)'),
+          replace: z.string().describe('The block of code to replace the "find" block with')
+        })).describe('List of search-and-replace patches to apply sequentially')
+      }),
+      handler: async (args) => {
+        const filePath = args.path;
+        const patches = args.patches;
+        const resolvedPath = this.resolveWorkspacePath(filePath);
+
+        this.consecutiveReadsCount = 0;
+
+        // Write-Only-After-Read Lock check
+        if (!this.readFiles.has(resolvedPath)) {
+          throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${filePath}" before you can patch it.`);
+        }
+
+        const exists = await this.fs.exists(resolvedPath);
+        if (!exists) {
+          throw new Error(`File not found at path: ${filePath}`);
+        }
+
+        let oldContent = await this.fs.readFile(resolvedPath);
+        let content = oldContent;
+
+        // Apply search-and-replace patches
+        for (let idx = 0; idx < patches.length; idx++) {
+          const patch = patches[idx];
+          const { find, replace } = patch;
+
+          // Count occurrences
+          const occurrences = content.split(find).length - 1;
+          if (occurrences === 0) {
+            throw new Error(`Patch failed at index ${idx}: The text to find was not found in the file.`);
+          }
+          if (occurrences > 1) {
+            throw new Error(`Patch failed at index ${idx}: The text to find is not unique (found ${occurrences} times).`);
+          }
+
+          // Apply replacement
+          content = content.replace(find, replace);
+        }
+
+        if (this.hooks.beforeWriteFile) {
+          const hookResult = await this.hooks.beforeWriteFile({
+            sessionId: this.sessionId || 'unknown',
+            workspaceRoot: this.workspaceRoot,
+            path: filePath,
+            content
+          });
+          if (hookResult?.cancel) {
+            throw new Error(`Patch operation for file "${filePath}" was cancelled by hook.`);
+          }
+          if (hookResult?.content !== undefined) {
+            content = hookResult.content;
+          }
+        }
+
+        const diffs = DiffEngine.compare(oldContent, content);
+        const coloredDiff = DiffEngine.renderColorDiff(diffs);
+
+        if (this.terminalIo) {
+          this.terminalIo.write(`\n\x1b[36mProposed changes for ${filePath} via patching:\x1b[0m\n`);
+          this.terminalIo.write(coloredDiff);
+          
+          const confirm = await this.terminalIo.askConfirm(`Approve writing changes to ${filePath}?`, false);
+          if (!confirm) {
+            throw new Error(`User rejected changes to "${filePath}".`);
+          }
+        }
+
+        let writeSuccess = true;
+        try {
+          await this.fs.writeFile(resolvedPath, content);
+          this.hasModifiedFiles = true;
+        } catch (e) {
+          writeSuccess = false;
+          throw e;
+        } finally {
+          if (this.hooks.afterWriteFile) {
+            await this.hooks.afterWriteFile({
+              sessionId: this.sessionId || 'unknown',
+              workspaceRoot: this.workspaceRoot,
+              path: filePath,
+              content,
+              success: writeSuccess
+            });
+          }
+        }
+
+        return `Successfully applied ${patches.length} patches to ${filePath}`;
+      }
+    });
+
+    this.coreTools.set('execute_command', {
+      name: 'execute_command',
+      description: 'Execute a terminal shell command. Safe commands (ls, git status, git diff) run automatically. Mutating/unsafe commands require explicit user confirmation.',
+      schema: z.object({
+        command: z.string().describe('The shell command to run')
+      }),
+      handler: async (args) => {
+        let command = args.command;
+        this.consecutiveReadsCount = 0;
+
+        if (!this.processRunner) {
+          throw new Error('ProcessRunner is not registered in the agent context');
+        }
+
+        if (this.hooks.beforeExecuteCommand) {
+          const hookResult = await this.hooks.beforeExecuteCommand({
+            sessionId: this.sessionId || 'unknown',
+            workspaceRoot: this.workspaceRoot,
+            command
+          });
+          if (hookResult?.cancel) {
+            throw new Error(`Command execution was cancelled by hook: "${command}"`);
+          }
+          if (hookResult?.command !== undefined) {
+            command = hookResult.command;
+          }
+        }
+
+        const safety = this.safetyGate.classifyCommand(command);
+        if (safety === 'unsafe') {
+          const isAuthed = this.safetyGate.isAuthorized(command);
+          if (!isAuthed) {
+            if (this.terminalIo) {
+              this.terminalIo.write(`\n\x1b[33mWarning: Unsafe command detected: "${command}"\x1b[0m\n`);
+              const confirm = await this.terminalIo.askConfirm(`Approve running this unsafe command?`, false);
+              if (!confirm) {
+                throw new Error(`User rejected command execution: "${command}"`);
+              }
+              const savePattern = await this.terminalIo.askConfirm(`Remember this permission for future calls?`, false);
+              if (savePattern) {
+                await this.safetyGate.authorizePattern(command);
+              }
+            } else {
+              throw new Error(`Command safety check failed (non-interactive mode): "${command}"`);
+            }
+          }
+        }
+
+        let runResult: any;
+        try {
+          runResult = await this.processRunner.run(command, { cwd: this.workspaceRoot });
+        } catch (e) {
+          if (this.hooks.afterExecuteCommand) {
+            await this.hooks.afterExecuteCommand({
+              sessionId: this.sessionId || 'unknown',
+              workspaceRoot: this.workspaceRoot,
+              command,
+              code: null,
+              stdout: '',
+              stderr: (e as Error).message
+            });
+          }
+          throw e;
+        }
+
+        if (this.hooks.afterExecuteCommand) {
+          await this.hooks.afterExecuteCommand({
+            sessionId: this.sessionId || 'unknown',
+            workspaceRoot: this.workspaceRoot,
+            command,
+            code: runResult.code,
+            stdout: runResult.stdout,
+            stderr: runResult.stderr
+          });
+        }
+
+        if (command.toLowerCase().includes('test')) {
+          this.hasExecutedTests = true;
+        }
+
+        return `Exit Code: ${runResult.code}\nStdout:\n${runResult.stdout}\nStderr:\n${runResult.stderr}`;
+      }
+    });
+
+    this.coreTools.set('list_directory', {
+      name: 'list_directory',
+      description: 'List the contents of a directory in the workspace.',
+      schema: z.object({
+        path: z.string().describe('The path of the directory to list')
+      }),
+      handler: async (args) => {
+        const dirPath = args.path || '.';
+        const resolvedPath = this.resolveWorkspacePath(dirPath);
+
+        this.consecutiveReadsCount++;
+        if (this.consecutiveReadsCount > 5) {
+          const warnMsg = `\x1b[33m[Heuristic Alert: Agent has read ${this.consecutiveReadsCount} files/directories consecutively without taking modifying actions.]\x1b[0m\n`;
+          if (this.terminalIo) {
+            this.terminalIo.write(warnMsg);
+          }
+        }
+
+        const exists = await this.fs.exists(resolvedPath);
+        if (!exists) {
+          return `Error: Directory not found: ${dirPath}`;
+        }
+        const files = await this.fs.listFiles(resolvedPath);
+        return files.join('\n');
+      }
+    });
+
+    this.coreTools.set('grep_search', {
+      name: 'grep_search',
+      description: 'Search for text matches within workspace files.',
+      schema: z.object({
+        pattern: z.string().describe('The text pattern or regex to search for'),
+        path: z.string().describe('The directory path to search')
+      }),
+      handler: async (args) => {
+        const pattern = args.pattern;
+        const searchPath = args.path || '.';
+
+        this.consecutiveReadsCount++;
+        if (this.consecutiveReadsCount > 5) {
+          const warnMsg = `\x1b[33m[Heuristic Alert: Agent has read ${this.consecutiveReadsCount} files/directories consecutively without taking modifying actions.]\x1b[0m\n`;
+          if (this.terminalIo) {
+            this.terminalIo.write(warnMsg);
+          }
+        }
+
+        const resolvedPath = this.resolveWorkspacePath(searchPath);
+        const exists = await this.fs.exists(resolvedPath);
+        if (!exists) {
+          return `Error: Path not found: ${searchPath}`;
+        }
+
+        const files = await this.fs.listFiles(resolvedPath);
+        const matches: string[] = [];
+        const regex = new RegExp(pattern, 'i');
+
+        for (const file of files) {
+          try {
+            if (file.includes('node_modules') || file.includes('.git')) continue;
+            const content = await this.fs.readFile(file);
+            const lines = content.split('\n');
+            lines.forEach((line, idx) => {
+              if (regex.test(line)) {
+                matches.push(`${file}:${idx + 1}: ${line.trim()}`);
+              }
+            });
+          } catch {
+            // Ignore failures
+          }
+        }
+
+        if (matches.length === 0) {
+          return `No matches found for pattern: ${pattern}`;
+        }
+        return matches.slice(0, 100).join('\n');
+      }
+    });
+
+    this.coreTools.set('delegate_task', {
+      name: 'delegate_task',
+      description: 'Deploy a specialized sub-agent to execute a sub-task. Returns the sub-agent\'s findings.',
+      schema: z.object({
+        role: z.string().describe('The specialized role of the sub-agent (e.g. "Security Auditor", "Test Runner", "Parser Optimizer")'),
+        taskPrompt: z.string().describe('The detailed instructions and objective of the task for the sub-agent'),
+        filesToInclude: z.array(z.string()).optional().describe('Relative paths of files to load in the sub-agent\'s context')
+      }),
+      handler: async (args) => {
+        const { role, taskPrompt, filesToInclude } = args;
+
+        const maxDepth = 3;
+        if (this.delegationDepth >= maxDepth) {
+          throw new Error(`Sub-agent delegation depth limit of ${maxDepth} exceeded. Spawning rejected.`);
+        }
+
+        const subSessionId = `${this.sessionId || 'sub'}-depth-${this.delegationDepth + 1}-${Date.now()}`;
+        const childAgent = new AgentCore(
+          this.fs,
+          this.llm,
+          this.store,
+          this.logger,
+          this.processRunner,
+          this.terminalIo,
+          this.workspaceRoot
+        );
+        childAgent.delegationDepth = this.delegationDepth + 1;
+        childAgent.setPricing(this.costInput, this.costOutput);
+
+        childAgent.agentsRules = `You are a specialized sub-agent with the role: "${role}".
+Your parent task instruction is:
+${taskPrompt}
+
+Provide a direct and detailed technical summary of your findings or implementation when you are done.`;
+
+        if (filesToInclude && Array.isArray(filesToInclude)) {
+          for (const file of filesToInclude) {
+            try {
+              const resolved = this.resolveWorkspacePath(file);
+              await childAgent.addFileToContext(resolved);
+            } catch (e) {
+              this.logger.warn(`Failed to add file to child context: ${file}`, e);
+            }
+          }
+        }
+
+        await childAgent.startSession(subSessionId);
+
+        if (this.terminalIo) {
+          this.terminalIo.write(`\n\x1b[35m[Spawning Sub-Agent: "${role}" at depth ${childAgent.delegationDepth}...]\x1b[0m\n`);
+        }
+
+        const response = await childAgent.processMessage(
+          `Begin task: "${taskPrompt}"`
+        );
+
+        if (this.terminalIo) {
+          this.terminalIo.write(`\n\x1b[35m[Sub-Agent "${role}" finished execution]\x1b[0m\n`);
+        }
+
+        return `[Sub-Agent "${role}" finished execution]
+Summary of Findings:
+${response.text}`;
+      }
+    });
   }
 
   setPricing(costInput: number, costOutput: number): void {
@@ -219,7 +557,6 @@ export class AgentCore {
   registerHooks(hooks: AgentHooks): void {
     this.hooks = { ...this.hooks, ...hooks };
   }
-
 
   async startSession(sessionId: string): Promise<void> {
     this.sessionId = sessionId;
@@ -318,7 +655,21 @@ export class AgentCore {
   }
 
   private async getCombinedToolsList(): Promise<ToolDefinition[]> {
-    const combined: ToolDefinition[] = [...this.tools];
+    const combined: ToolDefinition[] = [];
+    
+    // Register Core Tools using Zod-to-JSON-Schema converter
+    for (const tool of this.coreTools.values()) {
+      combined.push({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: zodToJsonSchema(tool.schema)
+        }
+      });
+    }
+
+    // Register MCP Tools
     for (const [serverName, client] of this.mcpClients.entries()) {
       try {
         const tools = await client.listTools();
@@ -596,404 +947,20 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
       return JSON.stringify(result);
     }
 
-    switch (toolName) {
-      case 'read_file': {
-        const filePath = args.path;
-        if (!filePath) throw new Error('Missing path parameter');
-        const resolvedPath = this.resolveWorkspacePath(filePath);
-        
-        this.readFiles.add(resolvedPath);
-        
-        this.consecutiveReadsCount++;
-        if (this.consecutiveReadsCount > 5) {
-          const warnMsg = `\x1b[33m[Heuristic Alert: Agent has read ${this.consecutiveReadsCount} files consecutively without taking modifying actions.]\x1b[0m\n`;
-          if (this.terminalIo) {
-            this.terminalIo.write(warnMsg);
-          }
-        }
-
-        const exists = await this.fs.exists(resolvedPath);
-        if (!exists) {
-          return `Error: File not found at path: ${filePath}`;
-        }
-        const content = await this.fs.readFile(resolvedPath);
-        return content;
-      }
-
-      case 'write_file': {
-        const filePath = args.path;
-        let content = args.content;
-        if (!filePath || content === undefined) {
-          throw new Error('Missing path or content parameter');
-        }
-        const resolvedPath = this.resolveWorkspacePath(filePath);
-
-        this.consecutiveReadsCount = 0;
-
-        // Write-Only-After-Read Lock check
-        if (!this.readFiles.has(resolvedPath)) {
-          throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${filePath}" before you can write to it.`);
-        }
-
-        if (this.hooks.beforeWriteFile) {
-          const hookResult = await this.hooks.beforeWriteFile({
-            sessionId: this.sessionId || 'unknown',
-            workspaceRoot: this.workspaceRoot,
-            path: filePath,
-            content
-          });
-          if (hookResult?.cancel) {
-            throw new Error(`Write operation for file "${filePath}" was cancelled by hook.`);
-          }
-          if (hookResult?.content !== undefined) {
-            content = hookResult.content;
-          }
-        }
-
-        let oldContent = '';
-        if (await this.fs.exists(resolvedPath)) {
-          oldContent = await this.fs.readFile(resolvedPath);
-        }
-
-        const diffs = DiffEngine.compare(oldContent, content);
-        const coloredDiff = DiffEngine.renderColorDiff(diffs);
-
-        if (this.terminalIo) {
-          this.terminalIo.write(`\n\x1b[36mProposed changes for ${filePath}:\x1b[0m\n`);
-          this.terminalIo.write(coloredDiff);
-          
-          const confirm = await this.terminalIo.askConfirm(`Approve writing changes to ${filePath}?`, false);
-          if (!confirm) {
-            throw new Error(`User rejected changes to "${filePath}".`);
-          }
-        }
-
-        let writeSuccess = true;
-        try {
-          await this.fs.writeFile(resolvedPath, content);
-          this.hasModifiedFiles = true;
-        } catch (e) {
-          writeSuccess = false;
-          throw e;
-        } finally {
-          if (this.hooks.afterWriteFile) {
-            await this.hooks.afterWriteFile({
-              sessionId: this.sessionId || 'unknown',
-              workspaceRoot: this.workspaceRoot,
-              path: filePath,
-              content,
-              success: writeSuccess
-            });
-          }
-        }
-
-        return `Successfully wrote content to ${filePath}`;
-      }
-
-      case 'patch_file': {
-        const filePath = args.path;
-        const patches = args.patches;
-        if (!filePath || !patches || !Array.isArray(patches)) {
-          throw new Error('Missing path or patches parameter');
-        }
-        const resolvedPath = this.resolveWorkspacePath(filePath);
-
-        this.consecutiveReadsCount = 0;
-
-        // Write-Only-After-Read Lock check
-        if (!this.readFiles.has(resolvedPath)) {
-          throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${filePath}" before you can patch it.`);
-        }
-
-        const exists = await this.fs.exists(resolvedPath);
-        if (!exists) {
-          throw new Error(`File not found at path: ${filePath}`);
-        }
-
-        let oldContent = await this.fs.readFile(resolvedPath);
-        let content = oldContent;
-
-        // Apply search-and-replace patches
-        for (let idx = 0; idx < patches.length; idx++) {
-          const patch = patches[idx];
-          const { find, replace } = patch;
-          if (find === undefined || replace === undefined) {
-            throw new Error(`Invalid patch at index ${idx}: find/replace is undefined`);
-          }
-
-          // Count occurrences
-          const occurrences = content.split(find).length - 1;
-          if (occurrences === 0) {
-            throw new Error(`Patch failed at index ${idx}: The text to find was not found in the file.`);
-          }
-          if (occurrences > 1) {
-            throw new Error(`Patch failed at index ${idx}: The text to find is not unique (found ${occurrences} times).`);
-          }
-
-          // Apply replacement
-          content = content.replace(find, replace);
-        }
-
-        if (this.hooks.beforeWriteFile) {
-          const hookResult = await this.hooks.beforeWriteFile({
-            sessionId: this.sessionId || 'unknown',
-            workspaceRoot: this.workspaceRoot,
-            path: filePath,
-            content
-          });
-          if (hookResult?.cancel) {
-            throw new Error(`Patch operation for file "${filePath}" was cancelled by hook.`);
-          }
-          if (hookResult?.content !== undefined) {
-            content = hookResult.content;
-          }
-        }
-
-        const diffs = DiffEngine.compare(oldContent, content);
-        const coloredDiff = DiffEngine.renderColorDiff(diffs);
-
-        if (this.terminalIo) {
-          this.terminalIo.write(`\n\x1b[36mProposed changes for ${filePath} via patching:\x1b[0m\n`);
-          this.terminalIo.write(coloredDiff);
-          
-          const confirm = await this.terminalIo.askConfirm(`Approve writing changes to ${filePath}?`, false);
-          if (!confirm) {
-            throw new Error(`User rejected changes to "${filePath}".`);
-          }
-        }
-
-        let writeSuccess = true;
-        try {
-          await this.fs.writeFile(resolvedPath, content);
-          this.hasModifiedFiles = true;
-        } catch (e) {
-          writeSuccess = false;
-          throw e;
-        } finally {
-          if (this.hooks.afterWriteFile) {
-            await this.hooks.afterWriteFile({
-              sessionId: this.sessionId || 'unknown',
-              workspaceRoot: this.workspaceRoot,
-              path: filePath,
-              content,
-              success: writeSuccess
-            });
-          }
-        }
-
-        return `Successfully applied ${patches.length} patches to ${filePath}`;
-      }
-
-      case 'execute_command': {
-        let command = args.command;
-        if (!command) throw new Error('Missing command parameter');
-
-        this.consecutiveReadsCount = 0;
-
-        if (!this.processRunner) {
-          throw new Error('ProcessRunner is not registered in the agent context');
-        }
-
-        if (this.hooks.beforeExecuteCommand) {
-          const hookResult = await this.hooks.beforeExecuteCommand({
-            sessionId: this.sessionId || 'unknown',
-            workspaceRoot: this.workspaceRoot,
-            command
-          });
-          if (hookResult?.cancel) {
-            throw new Error(`Command execution was cancelled by hook: "${command}"`);
-          }
-          if (hookResult?.command !== undefined) {
-            command = hookResult.command;
-          }
-        }
-
-        const safety = this.safetyGate.classifyCommand(command);
-        if (safety === 'unsafe') {
-          const isAuthed = this.safetyGate.isAuthorized(command);
-          if (!isAuthed) {
-            if (this.terminalIo) {
-              this.terminalIo.write(`\n\x1b[33mWarning: Unsafe command detected: "${command}"\x1b[0m\n`);
-              const confirm = await this.terminalIo.askConfirm(`Approve running this unsafe command?`, false);
-              if (!confirm) {
-                throw new Error(`User rejected command execution: "${command}"`);
-              }
-              const savePattern = await this.terminalIo.askConfirm(`Remember this permission for future calls?`, false);
-              if (savePattern) {
-                await this.safetyGate.authorizePattern(command);
-              }
-            } else {
-              throw new Error(`Command safety check failed (non-interactive mode): "${command}"`);
-            }
-          }
-        }
-
-        let runResult: any;
-        try {
-          runResult = await this.processRunner.run(command, { cwd: this.workspaceRoot });
-        } catch (e) {
-          if (this.hooks.afterExecuteCommand) {
-            await this.hooks.afterExecuteCommand({
-              sessionId: this.sessionId || 'unknown',
-              workspaceRoot: this.workspaceRoot,
-              command,
-              code: null,
-              stdout: '',
-              stderr: (e as Error).message
-            });
-          }
-          throw e;
-        }
-
-        if (this.hooks.afterExecuteCommand) {
-          await this.hooks.afterExecuteCommand({
-            sessionId: this.sessionId || 'unknown',
-            workspaceRoot: this.workspaceRoot,
-            command,
-            code: runResult.code,
-            stdout: runResult.stdout,
-            stderr: runResult.stderr
-          });
-        }
-
-        if (command.toLowerCase().includes('test')) {
-          this.hasExecutedTests = true;
-        }
-
-        return `Exit Code: ${runResult.code}\nStdout:\n${runResult.stdout}\nStderr:\n${runResult.stderr}`;
-      }
-
-
-      case 'list_directory': {
-        const dirPath = args.path || '.';
-        const resolvedPath = this.resolveWorkspacePath(dirPath);
-
-        this.consecutiveReadsCount++;
-        if (this.consecutiveReadsCount > 5) {
-          const warnMsg = `\x1b[33m[Heuristic Alert: Agent has read ${this.consecutiveReadsCount} files/directories consecutively without taking modifying actions.]\x1b[0m\n`;
-          if (this.terminalIo) {
-            this.terminalIo.write(warnMsg);
-          }
-        }
-
-        const exists = await this.fs.exists(resolvedPath);
-        if (!exists) {
-          return `Error: Directory not found: ${dirPath}`;
-        }
-        const files = await this.fs.listFiles(resolvedPath);
-        return files.join('\n');
-      }
-
-      case 'grep_search': {
-        const pattern = args.pattern;
-        const searchPath = args.path || '.';
-        if (!pattern) throw new Error('Missing pattern parameter');
-
-        this.consecutiveReadsCount++;
-        if (this.consecutiveReadsCount > 5) {
-          const warnMsg = `\x1b[33m[Heuristic Alert: Agent has read ${this.consecutiveReadsCount} files/directories consecutively without taking modifying actions.]\x1b[0m\n`;
-          if (this.terminalIo) {
-            this.terminalIo.write(warnMsg);
-          }
-        }
-
-        const resolvedPath = this.resolveWorkspacePath(searchPath);
-        const exists = await this.fs.exists(resolvedPath);
-        if (!exists) {
-          return `Error: Path not found: ${searchPath}`;
-        }
-
-        const files = await this.fs.listFiles(resolvedPath);
-        const matches: string[] = [];
-        const regex = new RegExp(pattern, 'i');
-
-        for (const file of files) {
-          try {
-            if (file.includes('node_modules') || file.includes('.git')) continue;
-            const content = await this.fs.readFile(file);
-            const lines = content.split('\n');
-            lines.forEach((line, idx) => {
-              if (regex.test(line)) {
-                matches.push(`${file}:${idx + 1}: ${line.trim()}`);
-              }
-            });
-          } catch {
-            // Ignore failures
-          }
-        }
-
-        if (matches.length === 0) {
-          return `No matches found for pattern: ${pattern}`;
-        }
-        return matches.slice(0, 100).join('\n');
-      }
-
-      case 'delegate_task': {
-        const { role, taskPrompt, filesToInclude } = args;
-        if (!role || !taskPrompt) {
-          throw new Error('Missing role or taskPrompt parameter');
-        }
-
-        const maxDepth = 3;
-        if (this.delegationDepth >= maxDepth) {
-          throw new Error(`Sub-agent delegation depth limit of ${maxDepth} exceeded. Spawning rejected.`);
-        }
-
-        const subSessionId = `${this.sessionId || 'sub'}-depth-${this.delegationDepth + 1}-${Date.now()}`;
-        const childAgent = new AgentCore(
-          this.fs,
-          this.llm,
-          this.store,
-          this.logger,
-          this.processRunner,
-          this.terminalIo,
-          this.workspaceRoot
-        );
-        childAgent.delegationDepth = this.delegationDepth + 1;
-        childAgent.setPricing(this.costInput, this.costOutput);
-
-        // Instruct child agent with its specialized system rules
-        childAgent.agentsRules = `You are a specialized sub-agent with the role: "${role}".
-Your parent task instruction is:
-${taskPrompt}
-
-Provide a direct and detailed technical summary of your findings or implementation when you are done.`;
-
-        // Inject files into child's context if requested
-        if (filesToInclude && Array.isArray(filesToInclude)) {
-          for (const file of filesToInclude) {
-            try {
-              const resolved = this.resolveWorkspacePath(file);
-              await childAgent.addFileToContext(resolved);
-            } catch (e) {
-              this.logger.warn(`Failed to add file to child context: ${file}`, e);
-            }
-          }
-        }
-
-        await childAgent.startSession(subSessionId);
-
-        if (this.terminalIo) {
-          this.terminalIo.write(`\n\x1b[35m[Spawning Sub-Agent: "${role}" at depth ${childAgent.delegationDepth}...]\x1b[0m\n`);
-        }
-
-        // Run child loop by sending task prompt
-        const response = await childAgent.processMessage(
-          `Begin task: "${taskPrompt}"`
-        );
-
-        if (this.terminalIo) {
-          this.terminalIo.write(`\n\x1b[35m[Sub-Agent "${role}" finished execution]\x1b[0m\n`);
-        }
-
-        return `[Sub-Agent "${role}" finished execution]
-Summary of Findings:
-${response.text}`;
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${toolName}`);
+    const coreTool = this.coreTools.get(toolName);
+    if (!coreTool) {
+      throw new Error(`Unknown tool: ${toolName}`);
     }
+
+    const parsed = coreTool.schema.safeParse(args);
+    if (!parsed.success) {
+      const formattedErrors = parsed.error.issues
+        .map(e => `${e.path.join('.')}: ${e.message}`)
+        .join(', ');
+      throw new Error(`Invalid params: ${formattedErrors}`);
+    }
+
+    return await coreTool.handler(parsed.data);
   }
 
   private resolveWorkspacePath(filePath: string): string {
