@@ -12,12 +12,12 @@ import { McpClient } from './mcp';
 import { CommandSafetyGate } from './safety';
 import { AgentHooks } from './hooks';
 import { ConfirmationPolicy, ConfirmationPreset } from './confirmation';
-import { VectorStore } from './vector-store';
-import { WorkspaceIndexer } from './indexer';
+import { VectorStore } from './features/history/vector-store';
+import { WorkspaceIndexer } from './features/history/indexer';
 import { CoreToolDefinition, ToolContext, registerCoreTools } from './core-tools';
 import { z } from 'zod';
-import { SkillsManager } from './skills';
-import { RulesManager } from './rules';
+import { SkillsManager } from './features/skills/skills';
+import { RulesManager } from './features/rules/rules';
 
 // Re-export so downstream code that imports CoreToolDefinition from agent.ts keeps working.
 export type { CoreToolDefinition };

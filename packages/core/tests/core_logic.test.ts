@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { MockFileSystem } from '../src/mocks';
 import { ConfigManager } from '../src/config';
-import { FileSessionStore } from '../src/history';
+import { FileSessionStore } from '../src/features/history/history';
 import { FileLogger } from '../src/logger';
 import { ChatMessage } from '../src/ports';
 import * as fs from 'fs';

@@ -3,8 +3,8 @@ import { ConfirmationPolicy } from './confirmation';
 import { CommandSafetyGate } from './safety';
 import { DiffEngine } from './diff';
 import { AgentHooks } from './hooks';
-import { VectorStore } from './vector-store';
-import { WorkspaceIndexer } from './indexer';
+import { VectorStore } from './features/history/vector-store';
+import { WorkspaceIndexer } from './features/history/indexer';
 import { z } from 'zod';
 
 // ── Tool type definitions ─────────────────────────────────────────────────────

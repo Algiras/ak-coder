@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { AgentCore } from '../src/agent';
 import { CommandSafetyGate } from '../src/safety';
-import { FileSessionStore } from '../src/history';
+import { FileSessionStore } from '../src/features/history/history';
 import { LLMService, ChatMessage } from '../src/ports';
 import {
   MockFileSystem,

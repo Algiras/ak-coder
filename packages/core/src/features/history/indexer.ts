@@ -7,7 +7,7 @@
  * all indexed documents.
  */
 
-import { FileSystem } from './ports';
+import { FileSystem } from '../../ports';
 import { VectorChunk, VectorStore } from './vector-store';
 
 export interface IndexerOptions {

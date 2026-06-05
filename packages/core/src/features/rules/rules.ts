@@ -1,5 +1,5 @@
-import { FileSystem } from './ports';
-import { Logger } from './logger';
+import { FileSystem } from '../../ports';
+import { Logger } from '../../logger';
 
 export class RulesManager {
   private agentsRules: string | null = null;

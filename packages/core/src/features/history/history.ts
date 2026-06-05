@@ -1,4 +1,4 @@
-import { SessionStore, ChatMessage, FileSystem } from './ports';
+import { SessionStore, ChatMessage, FileSystem, LLMCallRecord } from '../../ports';
 
 export class FileSessionStore implements SessionStore {
   constructor(private fs: FileSystem, private historyDir: string) {}

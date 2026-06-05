@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { VectorStore } from '../src/vector-store';
-import { WorkspaceIndexer } from '../src/indexer';
+import { VectorStore } from '../src/features/history/vector-store';
+import { WorkspaceIndexer } from '../src/features/history/indexer';
 import { AgentCore } from '../src/agent';
 import { ChatMessage } from '../src/ports';
 import {
