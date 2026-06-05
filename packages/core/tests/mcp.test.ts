@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'bun:test';
-import { McpClient } from '../src/mcp';
+import { McpClient } from '../src/features/mcp/mcp';
 import { MockLogger } from '../src/mocks';
 import * as fs from 'fs/promises';
 import * as path from 'path';

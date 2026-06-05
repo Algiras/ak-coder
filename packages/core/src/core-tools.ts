@@ -2,7 +2,7 @@ import { FileSystem, TerminalIo, ProcessRunner, Logger, ToolAnnotations } from '
 import { ConfirmationPolicy } from './confirmation';
 import { CommandSafetyGate } from './safety';
 import { DiffEngine } from './diff';
-import { AgentHooks } from './hooks';
+import { AgentHooks } from './features/hooks/hooks';
 import { VectorStore } from './features/history/vector-store';
 import { WorkspaceIndexer } from './features/history/indexer';
 import { z } from 'zod';

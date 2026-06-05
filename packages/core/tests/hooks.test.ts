@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { AgentCore } from '../src/agent';
 import { ChatMessage } from '../src/ports';
-import { AgentHooks } from '../src/hooks';
+import { AgentHooks } from '../src/features/hooks/hooks';
 import {
   MockFileSystem,
   MockSessionStore,

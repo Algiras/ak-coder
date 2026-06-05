@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from 'child_process';
-import { Logger } from './ports';
+import { Logger } from '../../ports';
 
 export interface McpToolSchema {
   name: string;

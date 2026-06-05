@@ -9,7 +9,7 @@ export * from './ignore';
 export * from './agent';
 export * from './safety';
 export * from './diff';
-export * from './hooks';
+export * from './features/hooks/hooks';
 export * from './confirmation';
 export * from './features/history/vector-store';
 export * from './features/history/indexer';
