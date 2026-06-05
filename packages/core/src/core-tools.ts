@@ -1,7 +1,7 @@
 import { FileSystem, TerminalIo, ProcessRunner, Logger, ToolAnnotations } from './ports';
-import { ConfirmationPolicy } from './confirmation';
-import { CommandSafetyGate } from './safety';
-import { DiffEngine } from './diff';
+import { ConfirmationPolicy } from './features/confirmation/confirmation';
+import { CommandSafetyGate } from './features/safety/safety';
+import { DiffEngine } from './features/diff/diff';
 import { AgentHooks } from './features/hooks/hooks';
 import { VectorStore } from './features/history/vector-store';
 import { WorkspaceIndexer } from './features/history/indexer';

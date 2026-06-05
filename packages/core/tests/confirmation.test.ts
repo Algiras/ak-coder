@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { ConfirmationPolicy } from '../src/confirmation';
-import { CommandSafetyGate } from '../src/safety';
+import { ConfirmationPolicy } from '../src/features/confirmation/confirmation';
+import { CommandSafetyGate } from '../src/features/safety/safety';
 import { MockFileSystem, MockTerminalIo } from '../src/mocks';
 
 describe('ConfirmationPolicy', () => {

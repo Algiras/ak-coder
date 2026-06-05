@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { DiffEngine } from '../src/diff';
+import { DiffEngine } from '../src/features/diff/diff';
 import { AgentCore } from '../src/agent';
 import {
   MockFileSystem,

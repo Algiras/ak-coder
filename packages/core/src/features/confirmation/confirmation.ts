@@ -1,5 +1,5 @@
-import { ConfirmationAction, ConfirmationRequest, ConfirmationResult, TerminalIo } from './ports';
-import { CommandSafetyGate } from './safety';
+import { ConfirmationAction, ConfirmationRequest, ConfirmationResult, TerminalIo } from '../../ports';
+import { CommandSafetyGate } from '../safety/safety';
 
 // ─── Policy Mode Types ──────────────────────────────────────────────────────
 

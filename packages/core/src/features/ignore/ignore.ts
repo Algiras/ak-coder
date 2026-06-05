@@ -1,4 +1,4 @@
-import { FileSystem } from './ports';
+import { FileSystem } from '../../ports';
 
 export class IgnoreMatcher {
   private rules: RegExp[] = [];

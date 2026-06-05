@@ -9,9 +9,9 @@ import {
   ToolDefinition
 } from './ports';
 import { McpClient } from './features/mcp/mcp';
-import { CommandSafetyGate } from './safety';
+import { CommandSafetyGate } from './features/safety/safety';
 import { AgentHooks } from './features/hooks/hooks';
-import { ConfirmationPolicy, ConfirmationPreset } from './confirmation';
+import { ConfirmationPolicy, ConfirmationPreset } from './features/confirmation/confirmation';
 import { VectorStore } from './features/history/vector-store';
 import { WorkspaceIndexer } from './features/history/indexer';
 import { CoreToolDefinition, ToolContext, registerCoreTools } from './core-tools';

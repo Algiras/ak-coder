@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { AgentCore } from '../src/agent';
-import { CommandSafetyGate } from '../src/safety';
+import { CommandSafetyGate } from '../src/features/safety/safety';
 import { FileSessionStore } from '../src/features/history/history';
 import { LLMService, ChatMessage } from '../src/ports';
 import {
