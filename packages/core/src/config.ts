@@ -7,6 +7,9 @@ export interface AppConfig {
   costInput: number; // per 1M tokens
   costOutput: number; // per 1M tokens
   mcpServers: Record<string, { command: string; args: string[] }>;
+  assistantName: string; // displayed label for assistant messages
+  systemName: string;    // displayed product name in banner / status
+  contextTokens: number; // max context window size (tokens)
 }
 
 export class ConfigManager {
@@ -26,7 +29,10 @@ export class ConfigManager {
         model: 'gpt-4o',
         costInput: 5.0,
         costOutput: 15.0,
-        mcpServers: {}
+        mcpServers: {},
+        assistantName: 'AKCoder',
+        systemName: 'ak-coder',
+        contextTokens: 128000,
       };
     }
 
@@ -53,6 +59,9 @@ export class ConfigManager {
     const costInput = typeof data.costInput === 'number' ? data.costInput : 5.0;
     const costOutput = typeof data.costOutput === 'number' ? data.costOutput : 15.0;
     const mcpServers = data.mcpServers && typeof data.mcpServers === 'object' ? data.mcpServers : {};
+    const assistantName = typeof data.assistantName === 'string' && data.assistantName.trim() ? data.assistantName.trim() : 'AKCoder';
+    const systemName = typeof data.systemName === 'string' && data.systemName.trim() ? data.systemName.trim() : 'ak-coder';
+    const contextTokens = typeof data.contextTokens === 'number' && data.contextTokens > 0 ? data.contextTokens : 128000;
 
     return {
       apiKey,
@@ -60,7 +69,10 @@ export class ConfigManager {
       model,
       costInput,
       costOutput,
-      mcpServers
+      mcpServers,
+      assistantName,
+      systemName,
+      contextTokens,
     };
   }
 }

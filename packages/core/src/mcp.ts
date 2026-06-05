@@ -9,6 +9,12 @@ export interface McpToolSchema {
     properties?: Record<string, any>;
     required?: string[];
   };
+  outputSchema?: {
+    type: 'object';
+    properties?: Record<string, any>;
+    required?: string[];
+    description?: string;
+  };
 }
 
 export class McpClient {

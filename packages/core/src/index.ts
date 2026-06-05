@@ -10,6 +10,7 @@ export * from './agent';
 export * from './safety';
 export * from './diff';
 export * from './hooks';
+export * from './confirmation';
 export * from './vector-store';
 export * from './indexer';
 export * from './adapters/docker-process';

@@ -7,6 +7,11 @@
     "dev": "bun run src/index.ts"
   },
   "dependencies": {
-    "@ak-coder/core": "workspace:*"
+    "@ak-coder/core": "workspace:*",
+    "@claude-code-kit/ink-renderer": "^0.3.1",
+    "@claude-code-kit/ui": "^0.3.1",
+    "@types/react": "^19.2.15",
+    "ink": "^7.0.3",
+    "react": "^19.2.6"
   }
 }

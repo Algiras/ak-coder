@@ -65,6 +65,8 @@ export class WorkspaceIndexer {
    * Rebuilds the vocabulary and re-embeds every chunk.
    */
   async indexWorkspace(fs: FileSystem, workspaceRoot: string): Promise<void> {
+    this.vocab.clear();
+
     const allFiles = await fs.listFiles(workspaceRoot);
     const eligible = allFiles.filter(f => this.isEligible(f));
 
@@ -88,6 +90,18 @@ export class WorkspaceIndexer {
       }
     }
 
+    // Also gather and build vocabulary for existing history chunks in the store
+    const historyChunks = this.store.getAllChunks().filter(c => c.filePath.startsWith('__history__/'));
+    const historyChunksWithTf = historyChunks.map(hc => {
+      const tf = termFrequency(tokenise(hc.text));
+      for (const term of tf.keys()) {
+        if (!this.vocab.has(term)) {
+          this.vocab.set(term, this.vocab.size);
+        }
+      }
+      return { chunk: hc, tf };
+    });
+
     // Second pass: embed and store
     const dim = this.vocab.size;
     for (const { filePath, chunks } of fileChunks) {
@@ -99,6 +113,15 @@ export class WorkspaceIndexer {
         embedding: this.embed(c.tf, dim),
       }));
       this.store.upsertFile(filePath, vectorChunks);
+    }
+
+    // Re-embed and store history chunks
+    for (const { chunk, tf } of historyChunksWithTf) {
+      const reEmbedded: VectorChunk = {
+        ...chunk,
+        embedding: this.embed(tf, dim),
+      };
+      this.store.upsertFile(chunk.filePath, [reEmbedded]);
     }
   }
 
@@ -127,6 +150,33 @@ export class WorkspaceIndexer {
       embedding: this.embed(c.tf, dim),
     }));
     this.store.upsertFile(filePath, vectorChunks);
+  }
+
+  /**
+   * Index a compacted conversation history summary.
+   */
+  indexSummary(summaryText: string, sessionId: string): void {
+    const filePath = `__history__/${sessionId}/summary.txt`;
+    const tokens = tokenise(summaryText);
+    const tf = termFrequency(tokens);
+
+    // Grow vocabulary with any new terms
+    for (const term of tf.keys()) {
+      if (!this.vocab.has(term)) {
+        this.vocab.set(term, this.vocab.size);
+      }
+    }
+
+    const dim = this.vocab.size;
+    const chunk: VectorChunk = {
+      filePath,
+      startLine: 0,
+      endLine: summaryText.split('\n').length - 1,
+      text: summaryText,
+      embedding: this.embed(tf, dim),
+    };
+
+    this.store.upsertFile(filePath, [chunk]);
   }
 
   /**

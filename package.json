@@ -7,9 +7,18 @@
   ],
   "scripts": {
     "test": "bun test",
-    "format": "bunx prettier --write \"**/*.{ts,json,md}\""
+    "test:coverage": "bun test --coverage",
+    "test:coverage:check": "bun test --coverage --coverage-threshold=85",
+    "format": "bunx prettier --write \"**/*.{ts,json,md}\"",
+    "postinstall": "node scripts/patch-signal-exit.mjs"
   },
   "devDependencies": {
     "typescript": "^5.4.5"
+  },
+  "overrides": {
+    "signal-exit": "^4.1.0"
+  },
+  "dependencies": {
+    "cli-highlight": "^2.1.11"
   }
 }

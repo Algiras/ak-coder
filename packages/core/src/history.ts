@@ -76,4 +76,9 @@ export class FileSessionStore implements SessionStore {
     await this.saveSession(newSessionId, branchedHistory);
     return branchedHistory;
   }
+
+  async truncateSession(sessionId: string, keepCount: number): Promise<void> {
+    const history = await this.loadSession(sessionId);
+    await this.saveSession(sessionId, history.slice(0, keepCount));
+  }
 }

@@ -121,4 +121,76 @@ describe('PluginSDK Zod Flow', () => {
       configurable: true
     });
   });
+
+  it('should respond to tools/list with registered tools', async () => {
+    const sdk = new PluginSDK();
+    sdk.registerTool({
+      name: 'ping',
+      description: 'Ping tool',
+      schema: z.object({ msg: z.string() }),
+      handler: (args) => args.msg
+    });
+
+    const mockStdin = new Readable({ read() {} });
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: mockStdin, writable: true, configurable: true });
+
+    sdk.start();
+
+    mockStdin.push(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) + '\n');
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(stdoutData).toHaveLength(1);
+    const res = JSON.parse(stdoutData[0].trim());
+    expect(res.result.tools).toHaveLength(1);
+    expect(res.result.tools[0].name).toBe('ping');
+
+    Object.defineProperty(process, 'stdin', { value: originalStdin, writable: true, configurable: true });
+  });
+
+  it('should include outputSchema in tool listing when defined', async () => {
+    const sdk = new PluginSDK();
+    sdk.registerTool({
+      name: 'typed_tool',
+      description: 'Tool with output schema',
+      schema: z.object({ input: z.string() }),
+      outputSchema: z.object({ result: z.string() }),
+      handler: (args) => ({ result: args.input.toUpperCase() })
+    });
+
+    const mockStdin = new Readable({ read() {} });
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: mockStdin, writable: true, configurable: true });
+
+    sdk.start();
+
+    mockStdin.push(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) + '\n');
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const res = JSON.parse(stdoutData[0].trim());
+    const tool = res.result.tools[0];
+    expect(tool.outputSchema).toBeDefined();
+    expect(tool.outputSchema.type).toBe('object');
+    expect(tool.outputSchema.properties.result).toBeDefined();
+
+    Object.defineProperty(process, 'stdin', { value: originalStdin, writable: true, configurable: true });
+  });
+
+  it('should handle notifications/initialized without error', async () => {
+    const sdk = new PluginSDK();
+    const mockStdin = new Readable({ read() {} });
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: mockStdin, writable: true, configurable: true });
+
+    sdk.start();
+
+    // Send a notification (no id, no response expected)
+    mockStdin.push(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    // No output should be written for notifications
+    expect(stdoutData).toHaveLength(0);
+
+    Object.defineProperty(process, 'stdin', { value: originalStdin, writable: true, configurable: true });
+  });
 });

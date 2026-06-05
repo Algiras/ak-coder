@@ -11,6 +11,12 @@ import { NodeFileSystem } from './adapters/filesystem';
 import { NodeTerminalIo } from './adapters/terminal';
 import { NodeProcessRunner } from './adapters/process';
 import { StdioJsonRpcAdapter } from './adapters/stdio';
+import { REPL_COMMAND_NAMES } from './repl';
+import { writePlanFile } from './plan-file';
+import { InkTerminalIo } from './ui/InkTerminalIo';
+import React from 'react';
+import { render } from '@claude-code-kit/ink-renderer';
+import { App } from './ui/App';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -35,12 +41,17 @@ async function run() {
   const globalConfigDir = path.join(homeDir, '.ak-coder');
   const localConfigDir = path.join(workspaceRoot, '.ak-coder');
 
+  // Check command line flags before creating any stdin-consuming adapters
+  const args = process.argv.slice(2);
+
   // Initialize Core Adapters
   const nfs = new NodeFileSystem();
-  const nio = new NodeTerminalIo();
+  const isInteractive = process.stdin.isTTY && !args.includes('--stdio');
 
-  // Check command line flags
-  const args = process.argv.slice(2);
+  // Interactive TTY uses Ink; stdio/pipe use NodeTerminalIo (readline-free)
+  const nio = isInteractive
+    ? new InkTerminalIo()
+    : new NodeTerminalIo(true, () => REPL_COMMAND_NAMES);
 
   // Sandbox flag: --sandbox [--sandbox-image <image>] [--sandbox-readonly]
   const sandboxEnabled = args.includes('--sandbox');
@@ -56,8 +67,8 @@ async function run() {
       })
     : new NodeProcessRunner();
 
-  if (sandboxEnabled && !args.includes('--stdio') && process.stdin.isTTY) {
-    nio.write(`\x1b[35m[Sandbox Mode] Commands will run inside Docker (${sandboxImage ?? 'node:20-alpine'})${sandboxReadOnly ? ' [read-only workspace]' : ''}\x1b[0m\n`);
+  if (sandboxEnabled && isInteractive) {
+    process.stdout.write(`\x1b[35m[Sandbox Mode] Commands will run inside Docker (${sandboxImage ?? 'node:20-alpine'})${sandboxReadOnly ? ' [read-only workspace]' : ''}\x1b[0m\n`);
   }
 
   // Load config
@@ -78,8 +89,8 @@ async function run() {
           ...(localConfig.mcpServers || {})
         }
       };
-      if (!args.includes('--stdio') && process.stdin.isTTY) {
-        nio.write('\x1b[90mLoaded project-level configuration overrides from .ak-coder/config.json\x1b[0m\n');
+      if (isInteractive) {
+        process.stdout.write('\x1b[90mLoaded project-level configuration overrides from .ak-coder/config.json\x1b[0m\n');
       }
     } catch (e) {
       nio.writeError(`Failed to load project-level config overrides: ${(e as Error).message}\n`);
@@ -100,13 +111,17 @@ async function run() {
   DependencyRegistry.register('logger', logger);
 
   const core = new AgentCore(nfs, llm, store, logger, npr, nio, workspaceRoot);
+  core.onPlanProduced = (text) => writePlanFile(workspaceRoot, text);
   core.setPricing(config.costInput, config.costOutput);
+  core.setMaxContextTokens(config.contextTokens);
   await core.loadAgentsRules(workspaceRoot);
   await core.loadSkills(workspaceRoot);
 
   if (config.mcpServers && typeof config.mcpServers === 'object') {
     await core.loadMcpServers(config.mcpServers);
   }
+
+  await core.loadPlugins(path.join(workspaceRoot, '.ak-coder', 'plugins'));
 
   // Register file-based hooks if they exist in the project directory
   const hooksDir = path.join(workspaceRoot, '.ak-coder', 'hooks');
@@ -210,217 +225,72 @@ async function run() {
 
   await registerCliHooks();
 
+  if (args.includes('--plan')) {
+    core.setConfirmationMode('plan');
+  }
 
   if (args.includes('init')) {
-    // Run setup bootstrap
-    nio.write('\x1b[36mInitializing ak-coder workspace...\x1b[0m');
+    process.stdout.write('\x1b[36mInitializing ak-coder workspace...\x1b[0m\n');
     await nfs.writeFile(path.join(workspaceRoot, 'AGENTS.md'), '# Workspace Instructions\n\n- Build Command: bun run build\n- Test Command: bun test\n');
     await nfs.writeFile(path.join(workspaceRoot, '.akcoderignore'), 'node_modules/\ndist/\n');
-    nio.write('\x1b[32mSuccessfully created AGENTS.md and .akcoderignore!\x1b[0m');
-    nio.close();
+    process.stdout.write('\x1b[32mSuccessfully created AGENTS.md and .akcoderignore!\x1b[0m\n');
     process.exit(0);
   }
 
   if (args.includes('--stdio')) {
-    nio.close(); // Close terminal reader since stdin is JSON-RPC stream
     const server = new StdioJsonRpcAdapter(core);
     server.start();
     return;
   }
 
-  // Piping mode check
-  if (!process.stdin.isTTY) {
-    nio.close();
-    // Read all piped stdin content
+  // Piping mode: read stdin and run one-off prompt
+  if (!isInteractive) {
     let inputData = '';
     process.stdin.setEncoding('utf-8');
     for await (const chunk of process.stdin) {
       inputData += chunk;
     }
     const prompt = args[0] || 'Explain the input context';
-    // Run one-off prompt
     await core.startSession('pipe-' + Date.now());
     const result = await core.processMessage(`${prompt}\n\nContext:\n${inputData}`);
     process.stdout.write(result.text + '\n');
     process.exit(0);
   }
 
-  // Default: Start Interactive REPL
-  await core.startSession('session-' + Date.now());
-
-  // ── Startup Banner ────────────────────────────────────────────────────────
-  const pkgVersion = '0.1.0';
+  // Interactive TTY — render Ink UI
   const modelName = config.model || 'unknown';
-  const truncatedRoot = workspaceRoot.length > 52
-    ? '\u2026' + workspaceRoot.slice(-51)
-    : workspaceRoot;
-  const sandboxBannerLine = sandboxEnabled
-    ? `\x1b[38;5;141m  \u29E1 Sandbox   \x1b[0m\x1b[90mDocker (${sandboxImage ?? 'node:20-alpine'})${sandboxReadOnly ? ' [read-only]' : ''}\x1b[0m\n`
-    : '';
+  const systemName = config.systemName;
+  const assistantName = config.assistantName;
+  const dirName = workspaceRoot.split('/').pop() ?? workspaceRoot;
+  const nameDisplay = systemName.slice(0, 10).padEnd(10);
+  process.stdout.write([
+    '',
+    `\x1b[36m ╭──────────────────────────────────────╮\x1b[0m`,
+    `\x1b[36m │\x1b[0m  \x1b[1;36m ${nameDisplay}\x1b[0m  \x1b[90mv0.1.0\x1b[0m                    \x1b[36m│\x1b[0m`,
+    `\x1b[36m │\x1b[0m  model  \x1b[33m${modelName.padEnd(30)}\x1b[0m\x1b[36m│\x1b[0m`,
+    `\x1b[36m │\x1b[0m  cwd    \x1b[32m${dirName.slice(0, 30).padEnd(30)}\x1b[0m\x1b[36m│\x1b[0m`,
+    `\x1b[36m ╰──────────────────────────────────────╯\x1b[0m`,
+    `\x1b[90m  /help for commands · Shift+Tab cycles modes · Ctrl+R history\x1b[0m`,
+    '',
+  ].join('\n') + '\n');
 
-  nio.write(
-    '\n' +
-    '\x1b[38;5;99m   \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557  \u2588\u2588\u2557      \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \x1b[0m\n' +
-    '\x1b[38;5;99m   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551 \u2588\u2588\u2554\u255D     \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255D\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\x1b[0m\n' +
-    '\x1b[38;5;135m   \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2554\u255D      \u2588\u2588\u2551     \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\x1b[0m\n' +
-    '\x1b[38;5;135m   \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2588\u2588\u2557      \u2588\u2588\u2551     \u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u255D  \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\x1b[0m\n' +
-    '\x1b[38;5;141m   \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2557     \u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551\x1b[0m\n' +
-    '\x1b[38;5;141m   \u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D      \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u255D \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D\x1b[0m\n' +
-    '\n' +
-    `\x1b[90m   v${pkgVersion}  \u00B7  agentic terminal coding assistant\x1b[0m\n` +
-    '\n' +
-    `\x1b[38;5;99m   \u25C6 Model     \x1b[0m\x1b[97m${modelName}\x1b[0m\n` +
-    `\x1b[38;5;99m   \u25C6 Workspace \x1b[0m\x1b[97m${truncatedRoot}\x1b[0m\n` +
-    sandboxBannerLine +
-    '\n' +
-    '\x1b[90m   Type \x1b[97m/help\x1b[90m for commands  \u00B7  \x1b[97m/exit\x1b[90m to quit  \u00B7  Ctrl+C to interrupt\x1b[0m\n' +
-    '\x1b[90m   \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1b[0m\n' +
-    '\n'
+  await core.startSession('session-' + Date.now());
+  const inkNio = nio as InkTerminalIo;
+  const { waitUntilExit } = await render(
+    React.createElement(App, {
+      core,
+      nio: inkNio,
+      workspaceRoot,
+      store,
+      llm,
+      npr,
+      model: config.model || 'unknown',
+      assistantName,
+      systemName,
+    })
   );
-
-  while (true) {
-    const prompt = await nio.ask('\x1b[32mak-coder > \x1b[0m');
-    if (!prompt) continue;
-
-    if (prompt.startsWith('/')) {
-      const parts = prompt.split(' ');
-      const command = parts[0];
-      const cmdArgs = parts.slice(1).join(' ');
-
-      if (command === '/exit') {
-        nio.write('Goodbye!');
-        await core.stopMcpServers();
-        nio.close();
-        process.exit(0);
-      }
-
-      if (command === '/help') {
-        nio.write('Available slash commands:');
-        nio.write('  /exit     - Exit the REPL session.');
-        nio.write('  /context  - View loaded files and context info.');
-        nio.write('  /help     - Show this help listing.');
-        nio.write('  /ping     - Verify endpoint connection latency.');
-        nio.write('  /budget   - View lifetime and recent budget spend details.');
-        nio.write('  /stats    - View summary token metrics and latency stats.');
-        nio.write('  /diff     - Show unified git diff of unstaged changes.');
-        
-        const skills = core.getSkills();
-        if (skills.length > 0) {
-          nio.write('\nAvailable Skills (run as /<skill-name> [arguments]):');
-          for (const skill of skills) {
-            nio.write(`  /${skill.name.padEnd(10)} - ${skill.description || 'No description provided.'}`);
-          }
-        }
-        continue;
-      }
-
-      if (command === '/budget') {
-        try {
-          const records = await store.getCallRecords();
-          const totalCost = records.reduce((sum, r) => sum + (r.cost || 0), 0);
-          
-          const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-          const recentCost = records
-            .filter(r => new Date(r.timestamp).getTime() > oneDayAgo)
-            .reduce((sum, r) => sum + (r.cost || 0), 0);
-
-          nio.write('\x1b[36m--- Budget Summary ---\x1b[0m');
-          nio.write(`  Total Spend:    $${totalCost.toFixed(5)}`);
-          nio.write(`  Last 24h Spend: $${recentCost.toFixed(5)}`);
-          nio.write(`  Total Calls:    ${records.length}`);
-        } catch (e) {
-          nio.writeError(`Failed to load budget metrics: ${(e as Error).message}`);
-        }
-        continue;
-      }
-
-      if (command === '/stats') {
-        try {
-          const records = await store.getCallRecords();
-          const totalInput = records.reduce((sum, r) => sum + (r.inputTokens || 0), 0);
-          const totalOutput = records.reduce((sum, r) => sum + (r.outputTokens || 0), 0);
-          const avgLatency = records.length > 0
-            ? records.reduce((sum, r) => sum + (r.latencyMs || 0), 0) / records.length
-            : 0;
-
-          nio.write('\x1b[36m--- Token & Call Stats ---\x1b[0m');
-          nio.write(`  Total Input Tokens:  ${totalInput}`);
-          nio.write(`  Total Output Tokens: ${totalOutput}`);
-          nio.write(`  Total Tokens:        ${totalInput + totalOutput}`);
-          nio.write(`  Avg Latency:         ${(avgLatency / 1000).toFixed(2)}s`);
-        } catch (e) {
-          nio.writeError(`Failed to load call statistics: ${(e as Error).message}`);
-        }
-        continue;
-      }
-
-      if (command === '/diff') {
-        nio.write('Running git diff...');
-        try {
-          const result = await npr.run('git diff', { cwd: workspaceRoot });
-          if (result.stdout.trim()) {
-            nio.write(result.stdout);
-          } else {
-            nio.write('No unstaged changes detected.');
-          }
-        } catch (e) {
-          nio.writeError(`Failed to run git diff: ${(e as Error).message}`);
-        }
-        continue;
-      }
-
-      if (command === '/context') {
-        nio.write(`Active Files: ${core.getActiveFiles().join(', ') || 'None'}`);
-        nio.write(`Compaction Summary: ${core.getContextSummary() || 'None'}`);
-        continue;
-      }
-
-      if (command === '/ping') {
-        nio.write('Pinging endpoint...');
-        const start = Date.now();
-        try {
-          await llm.chat([{ role: 'user', content: 'ping' }]);
-          nio.write(`Pong! Latency: ${Date.now() - start}ms`);
-        } catch (e) {
-          nio.writeError(`Ping failed: ${(e as Error).message}`);
-        }
-        continue;
-      }
-
-      // Check if it is a loaded skill command
-      const skillName = command.slice(1);
-      const skill = core.getSkills().find(s => s.name === skillName);
-      if (skill) {
-        nio.write(`\x1b[36mRunning skill: ${skill.name}...\x1b[0m\n`);
-        const fullMessage = `Apply Skill "${skill.name}" with arguments: "${cmdArgs}"\n\nInstructions:\n${skill.content}`;
-        nio.write('\x1b[36m[ak-coder is thinking...]\x1b[0m');
-        try {
-          const response = await core.processMessage(fullMessage, [], (chunk) => {
-            process.stdout.write(chunk);
-          });
-          process.stdout.write('\n');
-          nio.write(`\n\x1b[90mTokens: ${response.inputTokens} in / ${response.outputTokens} out | Est Cost: $${response.cost.toFixed(5)}\x1b[0m\n`);
-        } catch (e) {
-          nio.writeError(`Error executing skill: ${(e as Error).message}`);
-        }
-        continue;
-      }
-
-      nio.writeError(`Unknown command or skill: ${command}. Type /help for available commands.`);
-      continue;
-    }
-
-    nio.write('\x1b[36m[ak-coder is thinking...]\x1b[0m');
-    try {
-      const response = await core.processMessage(prompt, [], (chunk) => {
-        process.stdout.write(chunk);
-      });
-      process.stdout.write('\n');
-      nio.write(`\n\x1b[90mTokens: ${response.inputTokens} in / ${response.outputTokens} out | Est Cost: $${response.cost.toFixed(5)}\x1b[0m\n`);
-    } catch (e) {
-      nio.writeError(`Error processing prompt: ${(e as Error).message}`);
-    }
-  }
+  await waitUntilExit();
 }
 
 run();
+

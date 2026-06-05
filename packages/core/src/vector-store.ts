@@ -90,4 +90,9 @@ export class VectorStore {
   clear(): void {
     this.chunks = [];
   }
+
+  /** Retrieve all chunks directly */
+  getAllChunks(): VectorChunk[] {
+    return this.chunks;
+  }
 }
