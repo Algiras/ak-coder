@@ -1,0 +1,15 @@
+{
+  "name": "ak-coder-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "format": "bunx prettier --write \"**/*.{ts,json,md}\""
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

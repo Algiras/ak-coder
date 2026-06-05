@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build outputs
+dist/
+build/
+
+# Local configuration & session history logs
+.ak-coder/history/
+.ak-coder/logs/
+.ak-coder/permissions.json
+
+# Logs
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db

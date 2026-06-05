@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ak-coder/core": ["packages/core/src/index.ts"],
+      "@ak-coder/sdk": ["packages/sdk/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
+}

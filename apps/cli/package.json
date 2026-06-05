@@ -1,0 +1,12 @@
+{
+  "name": "ak-coder-cli",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@ak-coder/core": "workspace:*"
+  }
+}
