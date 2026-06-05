@@ -202,6 +202,9 @@ export class AgentCore {
       this.messages = [];
       this.logger.info(`New session started: ${sessionId}`);
     }
+    // Automatically load workspace rules and skills at session start
+    await this.loadAgentsRules(this.workspaceRoot);
+    await this.loadSkills(this.workspaceRoot);
   }
 
   async loadAgentsRules(workspaceRoot: string): Promise<void> {
