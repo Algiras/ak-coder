@@ -16,6 +16,8 @@ import { VectorStore } from './vector-store';
 import { WorkspaceIndexer } from './indexer';
 import { CoreToolDefinition, ToolContext, registerCoreTools } from './core-tools';
 import { z } from 'zod';
+import { SkillsManager } from './skills';
+import { RulesManager } from './rules';
 
 // Re-export so downstream code that imports CoreToolDefinition from agent.ts keeps working.
 export type { CoreToolDefinition };
@@ -82,8 +84,8 @@ export class AgentCore {
   private summary: string | null = null;
   private sessionId: string | null = null;
   private maxContextTokens = 16000;
-  public agentsRules: string | null = null;
-  private loadedSkills: { name: string; description: string; content: string }[] = [];
+  private rulesManager: RulesManager;
+  private skillsManager: SkillsManager;
   private costInput = 5.0;
   private costOutput = 15.0;
 
@@ -118,6 +120,8 @@ export class AgentCore {
   ) {
     this.safetyGate = new CommandSafetyGate(this.fs, this.workspaceRoot);
     this.confirmationPolicy = new ConfirmationPolicy('default');
+    this.rulesManager = new RulesManager(this.fs, this.logger);
+    this.skillsManager = new SkillsManager(this.fs, this.logger);
     this.coreTools = registerCoreTools(this.makeToolContext());
   }
 
@@ -180,6 +184,14 @@ export class AgentCore {
     this.confirmationPolicy.setPreset(preset);
   }
 
+  get agentsRules(): string | null {
+    return this.rulesManager.getRules();
+  }
+
+  set agentsRules(val: string | null) {
+    this.rulesManager.setRules(val);
+  }
+
   getConfirmationPolicy(): ConfirmationPolicy {
     return this.confirmationPolicy;
   }
@@ -208,63 +220,11 @@ export class AgentCore {
   }
 
   async loadAgentsRules(workspaceRoot: string): Promise<void> {
-    const agentsPath = `${workspaceRoot.replace(/\/$/, '')}/AGENTS.md`;
-    const claudePath = `${workspaceRoot.replace(/\/$/, '')}/CLAUDE.md`;
-    if (await this.fs.exists(agentsPath)) {
-      this.agentsRules = await this.fs.readFile(agentsPath);
-      this.logger.info('Loaded instructions from AGENTS.md');
-    } else if (await this.fs.exists(claudePath)) {
-      this.agentsRules = await this.fs.readFile(claudePath);
-      this.logger.info('Loaded instructions from CLAUDE.md');
-    }
+    await this.rulesManager.loadAgentsRules(workspaceRoot);
   }
 
   async loadSkills(workspaceRoot: string): Promise<void> {
-    this.loadedSkills = [];
-    try {
-      const allFiles = await this.fs.listFiles(workspaceRoot);
-      const skillFiles = allFiles.filter(f => f.endsWith('SKILL.md'));
-
-      for (const file of skillFiles) {
-        try {
-          const rawContent = await this.fs.readFile(file);
-          const parsed = this.parseSkillMarkdown(rawContent);
-          
-          const parts = file.split('/');
-          parts.pop(); // Remove SKILL.md
-          const parentFolder = parts.pop() || '';
-
-          this.loadedSkills.push({
-            name: parsed.name || parentFolder || 'unknown-skill',
-            description: parsed.description || '',
-            content: rawContent
-          });
-          this.logger.info(`Loaded skill: ${parsed.name || parentFolder || file}`);
-        } catch (e) {
-          this.logger.warn(`Failed to parse skill file ${file}: ${(e as Error).message}`);
-        }
-      }
-    } catch (e) {
-      this.logger.warn(`Failed to list skill files: ${(e as Error).message}`);
-    }
-  }
-
-  private parseSkillMarkdown(content: string): { name?: string; description?: string } {
-    const match = content.match(/^---\r?\n([\s\S]+?)\r?\n---/);
-    if (!match) return {};
-    
-    const yamlStr = match[1];
-    const lines = yamlStr.split('\n');
-    const result: Record<string, string> = {};
-    for (const line of lines) {
-      const idx = line.indexOf(':');
-      if (idx !== -1) {
-        const key = line.substring(0, idx).trim().toLowerCase();
-        const val = line.substring(idx + 1).replace(/^['"]|['"]$/g, '').trim();
-        result[key] = val;
-      }
-    }
-    return result;
+    await this.skillsManager.loadSkills(workspaceRoot);
   }
 
   async listSessions(): Promise<{ sessionId: string; timestamp: number }[]> {
@@ -442,7 +402,7 @@ export class AgentCore {
   }
 
   getSkills(): { name: string; description: string; content: string }[] {
-    return this.loadedSkills;
+    return this.skillsManager.getSkills();
   }
 
   getMessages(): ChatMessage[] {
@@ -479,7 +439,7 @@ export class AgentCore {
       agentsRulesChars: this.agentsRules?.length ?? 0,
       summary: this.summary,
       activeFiles: Array.from(this.activeFiles),
-      skills: this.loadedSkills.map(s => ({ name: s.name, description: s.description })),
+      skills: this.skillsManager.getSkills().map(s => ({ name: s.name, description: s.description })),
       mcpServers: Array.from(this.mcpClients.keys()),
     };
   }
@@ -577,9 +537,9 @@ export class AgentCore {
 Your workspace contains files which may be injected above the user prompt.
 ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.agentsRules}]\n` : ''}`;
 
-      if (this.loadedSkills.length > 0) {
+      if (this.skillsManager.getSkills().length > 0) {
         systemPromptContent += '\n\nAvailable Skills:';
-        for (const skill of this.loadedSkills) {
+        for (const skill of this.skillsManager.getSkills()) {
           systemPromptContent += `\n- Skill Name: ${skill.name}\n  Description: ${skill.description}\n  Instructions:\n${skill.content}\n`;
         }
       }

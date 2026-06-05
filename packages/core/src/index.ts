@@ -14,5 +14,5 @@ export * from './confirmation';
 export * from './vector-store';
 export * from './indexer';
 export * from './adapters/docker-process';
-
-
+export * from './skills';
+export * from './rules';
