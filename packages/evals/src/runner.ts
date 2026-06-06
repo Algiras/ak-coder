@@ -144,6 +144,7 @@ export interface RunOptions {
   filter?: string;
   providers?: string[];
   report?: boolean;
+  runs?: number;
 }
 
 export async function runAll(options: RunOptions = {}): Promise<void> {
@@ -165,6 +166,8 @@ export async function runAll(options: RunOptions = {}): Promise<void> {
     return;
   }
 
+  const numRuns = options.runs ?? 1;
+
   const reports: {
     providerName: string;
     model: string;
@@ -172,6 +175,7 @@ export async function runAll(options: RunOptions = {}): Promise<void> {
     avgLatency: string;
     avgTokens: number;
     results: EvalResult[];
+    stability: Map<string, { passes: number; runs: number }>;
   }[] = [];
 
   let overallPass = true;
@@ -184,7 +188,8 @@ export async function runAll(options: RunOptions = {}): Promise<void> {
     }
 
     const modelName = providerConfig.model || 'unknown';
-    console.log(`\n\x1b[36m=== Running evals for provider: ${providerName} (${modelName}) ===\x1b[0m\n`);
+    const runsLabel = numRuns > 1 ? ` x${numRuns} runs` : '';
+    console.log(`\n\x1b[36m=== Running evals for provider: ${providerName} (${modelName})${runsLabel} ===\x1b[0m\n`);
 
     const llm = new OpenAICompatibleLLMService(
       providerConfig.apiKey || 'mock-key',
@@ -199,21 +204,41 @@ export async function runAll(options: RunOptions = {}): Promise<void> {
     } catch {}
     const judge = new LLMJudge(judgeLlm);
 
-    const results: EvalResult[] = [];
-    for (const c of cases) {
-      process.stdout.write(`  running: ${c.name} ... `);
-      const result = await runEval(c, llm, judge);
-      process.stdout.write(result.pass ? '\x1b[32mPASS\x1b[0m\n' : '\x1b[31mFAIL\x1b[0m\n');
-      results.push(result);
+    // stability[caseName] = { passes, runs }
+    const stability = new Map<string, { passes: number; runs: number }>();
+    const lastResults = new Map<string, EvalResult>();
+
+    for (let run = 1; run <= numRuns; run++) {
+      if (numRuns > 1) console.log(`  \x1b[90m[run ${run}/${numRuns}]\x1b[0m`);
+      for (const c of cases) {
+        process.stdout.write(`  running: ${c.name} ... `);
+        const result = await runEval(c, llm, judge);
+        process.stdout.write(result.pass ? '\x1b[32mPASS\x1b[0m\n' : '\x1b[31mFAIL\x1b[0m\n');
+        // track stability
+        const prev = stability.get(c.name) ?? { passes: 0, runs: 0 };
+        stability.set(c.name, { passes: prev.passes + (result.pass ? 1 : 0), runs: prev.runs + 1 });
+        lastResults.set(c.name, result);
+      }
     }
 
+    const results = cases.map(c => lastResults.get(c.name)!);
     renderTable(results);
 
-    const providerPass = results.every(r => r.pass);
+    if (numRuns > 1) {
+      console.log('\n\x1b[33mStability (passes/runs):\x1b[0m');
+      for (const c of cases) {
+        const s = stability.get(c.name)!;
+        const stable = s.passes === s.runs;
+        const label = stable ? '\x1b[32mstable\x1b[0m' : s.passes === 0 ? '\x1b[31mfailing\x1b[0m' : '\x1b[33mFLAKY\x1b[0m';
+        console.log(`  ${s.passes}/${s.runs}  ${label}  ${c.name}`);
+      }
+    }
+
+    const providerPass = results.every(r => r.pass) && [...stability.values()].every(s => s.passes === s.runs);
     if (!providerPass) overallPass = false;
 
-    const totalPassed = results.filter(r => r.pass).length;
-    const passRate = ((totalPassed / results.length) * 100).toFixed(0) + '%';
+    const totalPassed = [...stability.values()].filter(s => s.passes === s.runs).length;
+    const passRate = ((totalPassed / cases.length) * 100).toFixed(0) + '%';
     const totalLatency = results.reduce((sum, r) => sum + r.latencyMs, 0);
     const avgLatency = ((totalLatency / results.length) / 1000).toFixed(1) + 's';
     const totalTokens = results.reduce((sum, r) => sum + r.totalTokens, 0);
@@ -225,51 +250,133 @@ export async function runAll(options: RunOptions = {}): Promise<void> {
       passRate,
       avgLatency,
       avgTokens,
-      results
+      results,
+      stability,
     });
   }
 
+  // Print binary score matrix to terminal
+  console.log('\n\x1b[36m=== Evaluation Binary Score Matrix ===\x1b[0m\n');
+  const providerNames = reports.map(r => r.providerName);
+  const colWidth = 20;
+  const nameWidth = 50;
+  const header = `  ${'Case Name'.padEnd(nameWidth)} | ` + providerNames.map(name => name.padEnd(colWidth)).join(' | ');
+  console.log(header);
+  console.log('─'.repeat(header.length));
+  for (const c of cases) {
+    const cols = providerNames.map(name => {
+      const rep = reports.find(r => r.providerName === name);
+      const s = rep?.stability.get(c.name);
+      let score: string;
+      if (!s) { score = '?'; }
+      else if (s.passes === s.runs) { score = numRuns > 1 ? `1 (${s.passes}/${s.runs})` : '1'; }
+      else if (s.passes === 0) { score = numRuns > 1 ? `0 (${s.passes}/${s.runs})` : '0'; }
+      else { score = `~ (${s.passes}/${s.runs})`; }
+      return score.padEnd(colWidth);
+    });
+    console.log(`  ${c.name.slice(0, nameWidth).padEnd(nameWidth)} | ` + cols.join(' | '));
+  }
+  console.log('─'.repeat(header.length) + '\n');
+
   if (options.report) {
-    const reportPath = path.join(__dirname, '..', 'eval_report.md');
-    console.log(`\nGenerating comparative report at: ${reportPath}`);
+    const evalsRoot = path.join(__dirname, '..');
+    const runId = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const reportsDir = path.join(evalsRoot, 'reports', runId);
+    const jsonlPath = path.join(evalsRoot, 'eval_results.jsonl');
 
-    let md = `# LLM Provider Evaluation Report\n\n`;
-    md += `Generated on: ${new Date().toISOString()}\n`;
-    md += `Total cases run per provider: ${cases.length}\n\n`;
-    md += `## Summary Comparison\n\n`;
-    md += `| Provider | Model | Pass Rate | Avg Latency | Avg Tokens |\n`;
-    md += `| --- | --- | --- | --- | --- |\n`;
+    // ── 1. Append JSONL records (one line per case × run × provider) ──────────
+    const jsonlLines: string[] = [];
     for (const rep of reports) {
-      md += `| **${rep.providerName}** | \`${rep.model}\` | ${rep.passRate} | ${rep.avgLatency} | ${rep.avgTokens} |\n`;
-    }
-    md += `\n## Provider Details\n\n`;
-    for (const rep of reports) {
-      md += `### ${rep.providerName} (\`${rep.model}\`)\n`;
-      md += `- **Pass Rate**: ${rep.passRate}\n`;
-      md += `- **Avg Latency**: ${rep.avgLatency}\n`;
-      md += `- **Avg Tokens**: ${rep.avgTokens}\n\n`;
-      md += `| Case | Status | Latency | Tokens | Details / Failures |\n`;
-      md += `| --- | --- | --- | --- | --- |\n`;
       for (const r of rep.results) {
-        const status = r.error ? 'ERROR' : r.pass ? 'PASS' : 'FAIL';
-        const latency = (r.latencyMs / 1000).toFixed(1) + 's';
-        let details = '';
-        if (r.error) {
-          details = `Error: ${r.error}`;
-        } else if (!r.pass) {
-          const fails = r.criteria.filter(c => !c.pass).map(c => `✗ ${c.description}${c.reasoning ? ` (${c.reasoning})` : ''}`);
-          details = fails.join('<br>');
+        const s = rep.stability.get(r.name);
+        for (let runIdx = 0; runIdx < numRuns; runIdx++) {
+          // We only have the last-run result in r; write stability metadata
+          jsonlLines.push(JSON.stringify({
+            runId,
+            provider: rep.providerName,
+            model: rep.model,
+            totalRuns: numRuns,
+            case: r.name,
+            // pass/score reflect stability across all runs
+            pass: s ? s.passes === s.runs : r.pass,
+            score: s && s.passes === s.runs ? 1 : s && s.passes > 0 ? 0.5 : 0,
+            stability: s ? { passes: s.passes, runs: s.runs, flaky: s.passes > 0 && s.passes < s.runs } : null,
+            latencySeconds: parseFloat((r.latencyMs / 1000).toFixed(1)),
+            totalTokens: r.totalTokens,
+            error: r.error ?? null,
+            criteria: r.criteria.map(c => ({
+              type: c.type,
+              description: c.description,
+              pass: c.pass,
+              reasoning: c.reasoning ?? null,
+            })),
+          }));
         }
-        md += `| ${r.name} | ${status === 'PASS' ? '✅ PASS' : '❌ ' + status} | ${latency} | ${r.totalTokens} | ${details} |\n`;
       }
-      md += `\n`;
+    }
+    await fs.appendFile(jsonlPath, jsonlLines.join('\n') + '\n', 'utf8');
+    console.log(`\nAppended ${jsonlLines.length} JSONL records to: ${jsonlPath}`);
+
+    // ── 2. Write reports/<runId>/summary.md ───────────────────────────────────
+    await fs.mkdir(reportsDir, { recursive: true });
+    const casesDir = path.join(reportsDir, 'cases');
+    await fs.mkdir(casesDir, { recursive: true });
+
+    let summary = `# Eval Report — ${runId}\n\n`;
+    summary += `Providers: ${reports.map(r => `\`${r.providerName}\` (${r.model})`).join(', ')}  \n`;
+    summary += `Cases: ${cases.length}  |  Runs per case: ${numRuns}\n\n`;
+    summary += `## Summary\n\n`;
+    summary += `| Provider | Model | Stable Pass Rate | Avg Latency | Avg Tokens |\n`;
+    summary += `| --- | --- | --- | --- | --- |\n`;
+    for (const rep of reports) {
+      summary += `| **${rep.providerName}** | \`${rep.model}\` | ${rep.passRate} | ${rep.avgLatency} | ${rep.avgTokens} |\n`;
+    }
+    summary += `\n## Binary Score Matrix\n\n`;
+    summary += `> \`1\` = stable pass · \`0\` = failing · \`⚠️\` = flaky (passes/runs)\n\n`;
+    summary += `| Case | ` + reports.map(rep => `${rep.providerName}`).join(' | ') + ` |\n`;
+    summary += `| --- | ` + reports.map(() => `---`).join(' | ') + ` |\n`;
+    for (const c of cases) {
+      const slug = c.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+      const rowScores = reports.map(rep => {
+        const s = rep.stability.get(c.name);
+        if (!s) return '?';
+        if (s.passes === s.runs) return numRuns > 1 ? `**1** (${s.passes}/${s.runs})` : '**1**';
+        if (s.passes === 0) return numRuns > 1 ? `0 (${s.passes}/${s.runs})` : '0';
+        return `⚠️ (${s.passes}/${s.runs})`;
+      });
+      summary += `| [${c.name}](cases/${slug}.md) | ` + rowScores.join(' | ') + ` |\n`;
+    }
+    await fs.writeFile(path.join(reportsDir, 'summary.md'), summary, 'utf8');
+
+    // ── 3. Write reports/<runId>/cases/<slug>.md per eval case ────────────────
+    for (const c of cases) {
+      const slug = c.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+      let md = `# ${c.name}\n\n`;
+      md += `Run ID: \`${runId}\`  |  Runs: ${numRuns}\n\n`;
+      for (const rep of reports) {
+        const s = rep.stability.get(c.name);
+        const r = rep.results.find(r => r.name === c.name);
+        const stableLabel = !s ? '?' : s.passes === s.runs ? '✅ stable' : s.passes === 0 ? '❌ failing' : '⚠️ flaky';
+        md += `## ${rep.providerName} (\`${rep.model}\`)\n\n`;
+        md += `**Stability**: ${stableLabel}  |  **${s?.passes ?? 0}/${s?.runs ?? 0}** runs passed\n\n`;
+        if (r) {
+          md += `| Criterion | Type | Pass | Reasoning |\n`;
+          md += `| --- | --- | --- | --- |\n`;
+          for (const cr of r.criteria) {
+            md += `| ${cr.description} | ${cr.type} | ${cr.pass ? '✅' : '❌'} | ${cr.reasoning ?? ''} |\n`;
+          }
+        }
+        md += '\n';
+      }
+      await fs.writeFile(path.join(casesDir, `${slug}.md`), md, 'utf8');
     }
 
-    await fs.writeFile(reportPath, md, 'utf8');
-    console.log(`Report successfully written!`);
+    console.log(`Reports written to: ${reportsDir}/`);
+    console.log(`  summary.md + ${cases.length} case files in cases/`);
   }
 
   if (!overallPass) {
     process.exit(1);
   }
 }
+

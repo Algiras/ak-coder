@@ -13,6 +13,7 @@ import './evals/grep_search.eval';
 import './evals/semantic_search.eval';
 import './evals/delegate_task.eval';
 import './evals/plan.eval';
+import './evals/golden.eval';
 
 import { runAll } from './src';
 
@@ -20,6 +21,7 @@ const args = process.argv.slice(2);
 let filter: string | undefined = undefined;
 let providers: string[] | undefined = undefined;
 let report = false;
+let runs = 1;
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
@@ -33,12 +35,16 @@ for (let i = 0; i < args.length; i++) {
     providers = args[++i].split(',').map(s => s.trim());
   } else if (arg === '--report' || arg === '--report=true') {
     report = true;
+  } else if (arg.startsWith('--runs=')) {
+    runs = parseInt(arg.slice('--runs='.length), 10) || 1;
+  } else if (arg === '--runs') {
+    runs = parseInt(args[++i], 10) || 1;
   } else if (!arg.startsWith('-') && !filter) {
     filter = arg;
   }
 }
 
-runAll({ filter, providers, report }).catch((e) => {
+runAll({ filter, providers, report, runs }).catch((e) => {
   console.error(e);
   process.exit(1);
 });

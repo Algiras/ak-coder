@@ -85,6 +85,130 @@ export function responseMatches(pattern: RegExp): StaticCriterion {
   };
 }
 
+export interface GoldenOptions {
+  checkToolCalls?: boolean;
+  checkFiles?: boolean;
+  checkResponse?: boolean;
+}
+
+export function golden(name: string, options: GoldenOptions = {}): StaticCriterion {
+  return {
+    type: 'static',
+    description: `Golden snapshot matches "${name}"`,
+    check: async (ctx) => {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      const goldensDir = path.join(__dirname, '..', 'goldens');
+      const goldenPath = path.join(goldensDir, `${name}.json`);
+
+      // Extract details from current run
+      const actualToolCalls = ctx.messages
+        .filter(m => m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0)
+        .flatMap(m => m.tool_calls!.map(tc => {
+          let parsedArgs = {};
+          try {
+            parsedArgs = JSON.parse(tc.function.arguments);
+          } catch {}
+          return {
+            name: tc.function.name,
+            arguments: parsedArgs
+          };
+        }));
+
+      const actualFiles: Record<string, string> = {};
+      for (const [filePath, content] of ctx.files.entries()) {
+        actualFiles[filePath] = content;
+      }
+
+      const actualResponse = ctx.finalResponse;
+
+      const runData = {
+        toolCalls: actualToolCalls,
+        files: actualFiles,
+        finalResponse: actualResponse
+      };
+
+      const checkToolCalls = options.checkToolCalls ?? true;
+      const checkFiles = options.checkFiles ?? true;
+      const checkResponse = options.checkResponse ?? false;
+
+      const updateGoldens = process.argv.includes('--update-goldens');
+
+      let exists = false;
+      try {
+        await fs.access(goldenPath);
+        exists = true;
+      } catch {}
+
+      if (!exists || updateGoldens) {
+        // Create goldens directory if missing
+        await fs.mkdir(goldensDir, { recursive: true });
+        await fs.writeFile(goldenPath, JSON.stringify(runData, null, 2), 'utf8');
+        console.log(`\n    \x1b[33m[golden] Created/Updated snapshot: packages/evals/goldens/${name}.json\x1b[0m`);
+        return true;
+      }
+
+      // Read expected golden data
+      try {
+        const raw = await fs.readFile(goldenPath, 'utf8');
+        const expected = JSON.parse(raw);
+
+        // Compare tool calls
+        if (checkToolCalls) {
+          const expectedCalls = expected.toolCalls || [];
+          if (actualToolCalls.length !== expectedCalls.length) {
+            console.log(`\n    \x1b[31m[golden mismatch] Tool call count mismatch: expected ${expectedCalls.length}, got ${actualToolCalls.length}\x1b[0m`);
+            return false;
+          }
+          for (let i = 0; i < expectedCalls.length; i++) {
+            const exp = expectedCalls[i];
+            const act = actualToolCalls[i];
+            if (exp.name !== act.name) {
+              console.log(`\n    \x1b[31m[golden mismatch] Tool name mismatch at index ${i}: expected "${exp.name}", got "${act.name}"\x1b[0m`);
+              return false;
+            }
+            // Deep compare arguments
+            const expJson = JSON.stringify(exp.arguments);
+            const actJson = JSON.stringify(act.arguments);
+            if (expJson !== actJson) {
+              console.log(`\n    \x1b[31m[golden mismatch] Tool arguments mismatch at index ${i} for "${exp.name}":\n      expected: ${expJson}\n      got:      ${actJson}\x1b[0m`);
+              return false;
+            }
+          }
+        }
+
+        // Compare files
+        if (checkFiles) {
+          const expectedFiles = expected.files || {};
+          const expectedPaths = Object.keys(expectedFiles);
+          
+          for (const filePath of expectedPaths) {
+            if (actualFiles[filePath] !== expectedFiles[filePath]) {
+              console.log(`\n    \x1b[31m[golden mismatch] File content mismatch for "${filePath}"\x1b[0m`);
+              return false;
+            }
+          }
+        }
+
+        // Compare final response
+        if (checkResponse) {
+          const expectedResponse = expected.finalResponse || '';
+          if (actualResponse.trim() !== expectedResponse.trim()) {
+            console.log(`\n    \x1b[31m[golden mismatch] Final response text mismatch:\n      expected: "${expectedResponse.trim()}"\n      got:      "${actualResponse.trim()}"\x1b[0m`);
+            return false;
+          }
+        }
+
+        return true;
+      } catch (err) {
+        console.log(`\n    \x1b[31m[golden error] Failed to process golden comparison: ${(err as Error).message}\x1b[0m`);
+        return false;
+      }
+    }
+  };
+}
+
 export const check = {
   toolCalled,
   toolCalledWith,
@@ -92,4 +216,5 @@ export const check = {
   fileModified,
   responseContains,
   responseMatches,
+  golden,
 };
