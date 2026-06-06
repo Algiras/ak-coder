@@ -425,7 +425,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     if (!isLoading) return;
     const onSigInt = () => handleInterrupt();
     process.on('SIGINT', onSigInt);
-    return () => process.off('SIGINT', onSigInt);
+    return () => { process.off('SIGINT', onSigInt); };
   }, [isLoading, handleInterrupt]);
 
   // ── Exit ────────────────────────────────────────────────────────────────────
