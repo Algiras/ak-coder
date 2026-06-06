@@ -170,14 +170,14 @@ describe('AgentCore with DockerProcessRunner', () => {
     const agent = new AgentCore(mockFs, mockLlm as any, mockStore, mockLogger, fakeDocker, mockNio, '/workspace');
     await agent.startSession('docker-session');
 
-    mockNio.confirms = [true]; // approve the 'unsafe' command
+    mockNio.confirmResults = [{ approved: true, applyToAll: false }]; // approve the 'unsafe' command
     mockLlm.responses = [
       {
         text: 'run version check',
         tool_calls: [{
           id: 'exec_1',
           type: 'function',
-          function: { name: 'execute_command', arguments: JSON.stringify({ command: 'node --version' }) }
+          function: { name: 'bash', arguments: JSON.stringify({ command: 'node --version' }) }
         }]
       },
       { text: 'done' }

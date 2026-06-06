@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { VectorStore } from '../src/vector-store';
-import { WorkspaceIndexer } from '../src/indexer';
+import { VectorStore } from '../src/features/history/vector-store';
+import { WorkspaceIndexer } from '../src/features/history/indexer';
 import { AgentCore } from '../src/agent';
 import { ChatMessage } from '../src/ports';
 import {
@@ -183,6 +183,44 @@ describe('WorkspaceIndexer', () => {
     expect(results.length).toBeGreaterThan(0);
     const topFile = results[0].filePath;
     expect(topFile).toBe('/ws/rpc.ts');
+  });
+
+  it('indexSummary stores a compacted summary in vector-store', () => {
+    const store = new VectorStore();
+    const indexer = new WorkspaceIndexer(store);
+    indexer.indexSummary('conversation about JSON-RPC protocol implementation details', 'session-123');
+
+    expect(store.size()).toBe(1);
+    expect(store.indexedFiles()).toContain('__history__/session-123/summary.txt');
+
+    const queryVec = indexer.embedQuery('JSON-RPC details');
+    const results = store.search(queryVec, 1, 0);
+    expect(results).toHaveLength(1);
+    expect(results[0].filePath).toBe('__history__/session-123/summary.txt');
+  });
+
+  it('indexWorkspace preserves existing history chunks and re-embeds them', async () => {
+    const mockFs = new MockFileSystem();
+    await mockFs.writeFile('/ws/main.ts', 'export const x = 1;');
+
+    const store = new VectorStore();
+    const indexer = new WorkspaceIndexer(store, { extensions: ['.ts'] });
+
+    // Index summary first
+    indexer.indexSummary('history summary message', 'sess-1');
+    expect(store.size()).toBe(1);
+
+    // Index workspace
+    await indexer.indexWorkspace(mockFs as any, '/ws');
+
+    // Should now have BOTH main.ts and history summary in the store
+    expect(store.indexedFiles()).toContain('__history__/sess-1/summary.txt');
+    expect(store.indexedFiles()).toContain('/ws/main.ts');
+    expect(store.size()).toBe(2);
+
+    // Semantic search should match both
+    const results = store.search(indexer.embedQuery('history summary'), 2, 0);
+    expect(results[0].filePath).toBe('__history__/sess-1/summary.txt');
   });
 });
 

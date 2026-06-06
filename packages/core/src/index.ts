@@ -1,17 +1,18 @@
 export * from './ports';
 export * from './registry';
 export * from './config';
-export * from './history';
+export * from './features/history/history';
 export * from './logger';
 export * from './adapters/llm';
 export * from './mocks';
-export * from './ignore';
+export * from './features/ignore/ignore';
 export * from './agent';
-export * from './safety';
-export * from './diff';
-export * from './hooks';
-export * from './vector-store';
-export * from './indexer';
+export * from './features/safety/safety';
+export * from './features/diff/diff';
+export * from './features/hooks/hooks';
+export * from './features/confirmation/confirmation';
+export * from './features/history/vector-store';
+export * from './features/history/indexer';
 export * from './adapters/docker-process';
-
-
+export * from './features/skills/skills';
+export * from './features/rules/rules';

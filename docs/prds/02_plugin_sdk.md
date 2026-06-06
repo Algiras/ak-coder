@@ -21,3 +21,7 @@ To keep `ak-coder` extensible without bloat, new tools and capabilities are load
 ### 3. Plugin SDK API
 *   Provides helper classes to define tools and register schemas (using `zod` or JSON Schema).
 *   Exposes wrapper functions to read from stdin, handle incoming RPC JSON strings, and print JSON-RPC payloads to stdout.
+*   **Modular Architecture**: The SDK codebase is structured into clean boundaries:
+    *   [`types.ts`](file:///Users/algimantask/Personal/ak-coder/packages/sdk/src/types.ts): Declares tool registration interfaces (`ToolDefinition`).
+    *   [`zod-to-json-schema.ts`](file:///Users/algimantask/Personal/ak-coder/packages/sdk/src/zod-to-json-schema.ts): Houses schema extraction and Zod conversion logic (`zodToJsonSchema`).
+    *   [`index.ts`](file:///Users/algimantask/Personal/ak-coder/packages/sdk/src/index.ts): Declares `PluginSDK` class orchestrating stdin listener loops, re-exporting submodules.
