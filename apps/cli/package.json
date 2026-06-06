@@ -9,20 +9,28 @@
     "url": "https://github.com/Algiras/ak-coder.git"
   },
   "homepage": "https://algiras.github.io/ak-coder",
+  "bugs": "https://github.com/Algiras/ak-coder/issues",
   "main": "dist/index.js",
   "bin": {
     "ak-coder": "dist/index.js"
   },
   "files": [
-    "dist/",
-    "package.json",
+    "dist/index.js",
     "README.md"
   ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "bun build src/index.ts --target bun --outfile dist/index.js --external react-devtools-core && chmod +x dist/index.js"
+    "build": "bun build src/index.ts --target bun --outfile dist/index.js --external react-devtools-core && chmod +x dist/index.js",
+    "prepublishOnly": "bun run build"
   },
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
     "@ak-coder/core": "workspace:*",
     "@claude-code-kit/ink-renderer": "^0.3.1",
     "@claude-code-kit/ui": "^0.3.1",
