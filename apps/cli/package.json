@@ -1,8 +1,18 @@
 {
-  "name": "ak-coder-cli",
+  "name": "@algiras/ak-coder",
   "version": "0.1.0",
-  "private": true,
+  "description": "A hackable, hexagonal-architecture LLM agent harness for the terminal",
+  "keywords": ["ai", "agent", "llm", "cli", "terminal", "ollama", "openai"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Algiras/ak-coder.git"
+  },
+  "homepage": "https://algiras.github.io/ak-coder",
   "main": "src/index.ts",
+  "bin": {
+    "ak-coder": "src/index.ts"
+  },
   "scripts": {
     "dev": "bun run src/index.ts"
   },

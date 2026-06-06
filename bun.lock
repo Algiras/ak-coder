@@ -12,8 +12,11 @@
       },
     },
     "apps/cli": {
-      "name": "ak-coder-cli",
+      "name": "@algiras/ak-coder",
       "version": "0.1.0",
+      "bin": {
+        "ak-coder": "src/index.ts",
+      },
       "dependencies": {
         "@ak-coder/core": "workspace:*",
         "@claude-code-kit/ink-renderer": "^0.3.1",
@@ -58,6 +61,8 @@
 
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.3.0", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^5.0.0" } }, "sha512-p+CMKJ93HFmLkjXKlXiVGlMQEuRb6H0MokBSwUsX+S6BRX8eV5naFZpQJFfJHjRZY0Hmnqy1/r6UWl3x+19zYA=="],
 
+    "@algiras/ak-coder": ["@algiras/ak-coder@workspace:apps/cli"],
+
     "@claude-code-kit/ink-renderer": ["@claude-code-kit/ink-renderer@0.3.1", "", { "dependencies": { "@alcalzone/ansi-tokenize": "*", "@claude-code-kit/shared": "0.3.1", "auto-bind": "*", "bidi-js": "*", "chalk": "*", "cli-boxes": "*", "code-excerpt": "*", "emoji-regex": "*", "get-east-asian-width": "*", "indent-string": "*", "semver": "*", "signal-exit": "*", "stack-utils": "*", "strip-ansi": "*", "supports-hyperlinks": "*", "type-fest": "*", "usehooks-ts": "*", "wrap-ansi": "*" }, "peerDependencies": { "react": ">=18.0.0", "react-reconciler": ">=0.29.0" } }, "sha512-gYviT7RcNzTQH+6L2jIiozukJwvP+AyTf13grWFc7NyeLXCSdP/adyPHkRZoXqVcqhI3wbDs0zcSABX+GPd6cg=="],
 
     "@claude-code-kit/shared": ["@claude-code-kit/shared@0.3.1", "", { "dependencies": { "@alcalzone/ansi-tokenize": "*", "emoji-regex": "*", "get-east-asian-width": "*", "semver": "*", "strip-ansi": "*" } }, "sha512-xZSZ3FdnAf/JdKWrxnqq1d9tjBV1zeK/7T2/l9YkKrp2yFKK4IAcjfLCp0y0J+J4l+5j1T1BmGmzsJTFsyvNzw=="],
@@ -65,8 +70,6 @@
     "@claude-code-kit/ui": ["@claude-code-kit/ui@0.3.1", "", { "dependencies": { "@claude-code-kit/ink-renderer": "0.3.1", "@claude-code-kit/shared": "0.3.1", "chalk": "*", "chokidar": "*", "figures": "*", "marked": "*", "strip-ansi": "*", "usehooks-ts": "^3.1.1", "zod": ">=3.20.0" }, "peerDependencies": { "@claude-code-kit/agent": ">=0.1.0", "react": ">=18.0.0" }, "optionalPeers": ["@claude-code-kit/agent"] }, "sha512-S9feVDTWTwf7yIEwRKwPO8uh10vzRJf7SPvXl1Dmo0W0ZCfDU0wPFysPTxXHwMkq8bRD98CEFWAb/3JwmIrDKA=="],
 
     "@types/react": ["@types/react@19.2.17", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw=="],
-
-    "ak-coder-cli": ["ak-coder-cli@workspace:apps/cli"],
 
     "ansi-escapes": ["ansi-escapes@7.3.0", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-BvU8nYgGQBxcmMuEeUEmNTvrMVjJNSH7RgW24vXexN4Ven6qCvy4TntnvlnwnMLTVlcRQQdbRY8NKnaIoeWDNg=="],
 
