@@ -168,6 +168,7 @@ export function AkCoderREPL({
     { name: 'agent', description: 'Spawn a sub-agent: /agent <role> | <task>' },
     { name: 'settings', description: 'View or change settings: /settings [key] [value]' },
     { name: 'skills', description: 'List loaded skills or invoke: /skills:name [args]' },
+    { name: 'providers', description: 'Manage LLM providers: /providers [select <name> | set <name> <key> <value>]' },
   ];
 
   // ── Render ───────────────────────────────────────────────────────────────────
