@@ -37,9 +37,12 @@ Be concise. Report issues as a bullet list per file.
 ```
 
 Then use it:
+
 ```
-/review
+/skills:review
 ```
+
+Legacy form `/review` also works in the Ink REPL.
 
 ## Multiple SKILL.md files
 

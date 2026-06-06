@@ -4,6 +4,8 @@ sidebar_position: 2
 
 # File Tools
 
+Tool annotations are documented in [Tool Annotations](/docs/tools/annotations). Summary below each tool.
+
 ## read_file
 
 Reads a file and returns its content.
@@ -27,7 +29,7 @@ Writes complete new content to a file. Creates parent directories if needed.
 - `path` (string, required) — workspace-relative path
 - `content` (string, required) — full file content to write
 
-Shows a colored unified diff before writing. Requires user confirmation unless the session policy is `yolo`. The file must have been read first in the current session.
+Shows a colored unified diff before writing. Requires user confirmation in default mode (use the permission prompt, or "approve all" for the session). The file must have been read first in the current session.
 
 Plugins can intercept writes via `beforeWriteFile` / `afterWriteFile` hooks to transform content or cancel the write.
 

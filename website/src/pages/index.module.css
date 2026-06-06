@@ -1,8 +1,8 @@
 .hero {
   padding: 5rem 2rem 4rem;
   text-align: center;
-  background: linear-gradient(160deg, var(--ifm-color-primary-darkest) 0%, var(--ifm-color-primary-dark) 100%);
-  color: white;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
+  color: #fff;
 }
 
 .heroInner {
@@ -14,24 +14,26 @@
   font-size: 3.5rem;
   font-weight: 800;
   margin-bottom: 1rem;
-  color: white;
+  color: #fff;
 }
 
 .heroSubtitle {
   font-size: 1.25rem;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.88);
   margin-bottom: 1.5rem;
   line-height: 1.6;
 }
 
 .install {
   display: inline-block;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.35);
   border-radius: 8px;
-  padding: 0.6rem 1.2rem;
+  padding: 0.55rem 1.2rem;
   margin-bottom: 2rem;
-  font-size: 1.1rem;
-  letter-spacing: 0.02em;
+  font-size: 1rem;
+  font-family: var(--ifm-font-family-monospace);
+  color: #e2e8f0;
+  letter-spacing: 0.01em;
 }
 
 .heroCtas {
@@ -41,6 +43,28 @@
   flex-wrap: wrap;
 }
 
+.heroCtas a.button--primary {
+  background: #fff;
+  color: #1d4ed8;
+  border-color: #fff;
+}
+
+.heroCtas a.button--primary:hover {
+  background: #e0e7ff;
+  border-color: #e0e7ff;
+}
+
+.heroCtas a.button--secondary {
+  background: transparent;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+
+.heroCtas a.button--secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #fff;
+}
+
 .features {
   padding: 4rem 0;
 }
@@ -48,25 +72,24 @@
 .featuresGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .feature {
   padding: 1.5rem;
   border-radius: 8px;
-  border: 1px solid var(--ifm-color-emphasis-200);
+  border: 1px solid var(--ifm-color-emphasis-300);
 }
 
 .feature h3 {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary-dark);
 }
 
 .feature p {
   margin: 0;
-  font-size: 0.95rem;
-  color: var(--ifm-color-emphasis-700);
+  font-size: 0.9rem;
   line-height: 1.6;
 }

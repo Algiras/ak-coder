@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Configuration
 
-ak-coder stores all config in `~/.ak-coder/config.json`. It is created automatically on first run.
+ak-coder stores global config in `~/.ak-coder/config.json`. It is created automatically on first run. Project-level overrides merge on top from `.ak-coder/config.json` in the workspace root.
 
 ## Minimal config (Ollama)
 
@@ -54,18 +54,49 @@ ak-coder stores all config in `~/.ak-coder/config.json`. It is created automatic
 | `providers.<name>.baseUrl` | OpenAI-compatible endpoint URL |
 | `providers.<name>.apiKey` | API key (`"ollama"` for local Ollama) |
 | `providers.<name>.model` | Model name string |
-| `assistantName` | Name shown in the REPL (default: `AKCoder`) |
+| `providers.<name>.costInput` | Input cost per 1M tokens (for `/budget`) |
+| `providers.<name>.costOutput` | Output cost per 1M tokens |
+| `assistantName` | Label for assistant messages in the REPL (default: `AKCoder`) |
+| `systemName` | Product name in the banner (default: `ak-coder`) |
 | `contextTokens` | Max context window size (default: `128000`) |
+| `mcpServers` | MCP server definitions (merged with project config) |
+
+Provider presets for `groq`, `gemini`, `deepseek`, and `openrouter` are auto-populated on first load if missing, using environment variables when available.
 
 ## REPL commands for config
 
 ```
-/providers     — list all configured providers and switch active one
-/config        — show path to config file
+/providers              — list providers and switch interactively
+/providers select ollama  — switch active provider
+/providers set ollama model gemma3:4b  — update a provider field
+/settings               — view editable settings
+/settings contextTokens 200000         — change a setting at runtime
+/model                  — pick a model (Ollama picker when available)
+/model llama3.2         — set model directly
 ```
+
+Config file path: `~/.ak-coder/config.json`
 
 ## Environment variables
 
 | Variable | Effect |
 |----------|--------|
-| `OPEN_ROUTER_KEY` | Sets OpenRouter API key and makes openrouter the active provider |
+| `OPEN_ROUTER_KEY` / `OPENROUTER_API_KEY` | OpenRouter API key (default provider preset) |
+| `GEMINI_API_KEY` | Gemini API key |
+| `GROQ_KEY` / `GROQ_API_KEY` | Groq API key |
+| `DEEPSEEK_API_KEY` | DeepSeek API key |
+| `OPENAI_API_KEY` | OpenAI API key (legacy root config) |
+| `OPENAI_API_BASE` | OpenAI-compatible base URL override |
+
+## CLI flags
+
+| Flag | Effect |
+|------|--------|
+| `--plan` | Start in plan mode (no writes or commands) |
+| `--sandbox` | Run bash inside Docker |
+| `--sandbox-image <image>` | Docker image (default: `node:20-alpine`) |
+| `--sandbox-readonly` | Mount workspace read-only in sandbox |
+| `--stdio` | JSON-RPC mode on stdin/stdout (no REPL) |
+| `init` | Create `AGENTS.md` and `.akcoderignore` in cwd |
+
+See [Providers](/docs/providers) for per-provider setup guides.

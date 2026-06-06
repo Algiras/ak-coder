@@ -10,6 +10,8 @@
     "test:coverage": "bun test --coverage",
     "test:coverage:check": "bun test --coverage --coverage-threshold=85",
     "format": "bunx prettier --write \"**/*.{ts,json,md}\"",
+    "start": "bun run apps/cli/src/index.ts",
+    "build:cli": "bun run --filter @algiras/ak-coder build",
     "postinstall": "node scripts/patch-signal-exit.mjs"
   },
   "devDependencies": {
