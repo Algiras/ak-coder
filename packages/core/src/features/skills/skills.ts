@@ -1,5 +1,5 @@
 import { FileSystem } from '../../ports';
-import { Logger } from '../../logger';
+import { Logger } from '../../ports';
 
 export interface SkillDefinition {
   name: string;

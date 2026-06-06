@@ -666,7 +666,7 @@ export const COMMANDS: Record<string, ReplCommand> = {
         }
 
         const coerced: any = (key === 'costInput' || key === 'costOutput') ? parseFloat(value) : value;
-        providers[name][key] = coerced;
+        (providers[name] as Record<string, unknown>)[key] = coerced;
         config.providers = providers;
 
         await configManager.save(config);

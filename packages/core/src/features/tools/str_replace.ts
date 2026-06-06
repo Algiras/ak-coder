@@ -38,14 +38,14 @@ export const strReplaceTool = (ctx: ToolContext): CoreToolDefinition<typeof sche
     if (!approval.approved) return `Edit to ${args.path} was rejected.`;
 
     if (ctx.hooks.beforeWriteFile) {
-      const hookResult = await ctx.hooks.beforeWriteFile({ path: resolvedPath, content: updated, sessionId: ctx.getSessionId() || '' });
+      const hookResult = await ctx.hooks.beforeWriteFile({ path: resolvedPath, content: updated, sessionId: ctx.getSessionId() || '', workspaceRoot: ctx.workspaceRoot });
       if (hookResult?.cancel) return `Edit to ${args.path} cancelled by before-write hook.`;
     }
     await ctx.fs.writeFile(resolvedPath, updated);
     ctx.readFiles.add(resolvedPath);
     ctx.markModified();
     if (ctx.hooks.afterWriteFile) {
-      await ctx.hooks.afterWriteFile({ path: resolvedPath, content: updated, sessionId: ctx.getSessionId() || '', success: true });
+      await ctx.hooks.afterWriteFile({ path: resolvedPath, content: updated, sessionId: ctx.getSessionId() || '', workspaceRoot: ctx.workspaceRoot, success: true });
     }
     return `Edited ${args.path} successfully.`;
   }

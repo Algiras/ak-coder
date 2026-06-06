@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { CoreToolDefinition, ToolContext, ChildAgent } from './features/tools/types';
 import { readFileTool } from './features/tools/read_file';
 import { writeFileTool } from './features/tools/write_file';
@@ -14,8 +15,8 @@ import { delegateTaskTool } from './features/tools/delegate_task';
 
 export type { CoreToolDefinition, ToolContext, ChildAgent };
 
-export function registerCoreTools(ctx: ToolContext): Map<string, CoreToolDefinition> {
-  const tools = new Map<string, CoreToolDefinition>();
+export function registerCoreTools(ctx: ToolContext): Map<string, CoreToolDefinition<z.ZodObject<any, any, any, any, any>>> {
+  const tools = new Map<string, CoreToolDefinition<z.ZodObject<any, any, any, any, any>>>();
 
   tools.set('read_file', readFileTool(ctx));
   tools.set('write_file', writeFileTool(ctx));

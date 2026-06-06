@@ -102,7 +102,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     const { contextPct, mode } = core.getStatus();
     const currentModel = (llm as { defaultModel?: string }).defaultModel ?? model ?? '';
     const segs: StatusLineSegment[] = [];
-    if (mode !== 'default') segs.push({ content: mode.toUpperCase(), color: 'yellow' });
+    if (mode && mode !== 'default') segs.push({ content: mode.toUpperCase(), color: 'yellow' });
     segs.push({ content: `${contextPct}% ctx`, color: 'gray' });
     if (currentModel) segs.push({ content: currentModel, color: 'blue' });
     if (lastTurn) {
@@ -205,7 +205,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       const response = await core.processMessage(text, [], (chunk) => {
         streamRef.current += chunk;
         setStreaming(streamRef.current);
-      }, controller.signal);
+      }, controller.signal as AbortSignal);
 
       setStreaming(null);
       if (streamRef.current) addMsg('assistant', streamRef.current);
