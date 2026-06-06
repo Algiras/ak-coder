@@ -88,19 +88,31 @@ Auto-appears in `/help` and tab completion. No other files to edit.
 
 ### Add a new built-in agent tool
 
-**File:** `packages/core/src/core-tools.ts` — `registerCoreTools()`
+**Folder:** `packages/core/src/features/tools/`
+
+Create a new file under the `tools/` folder (e.g. `my_tool.ts`) and define a strict schema type composition:
 
 ```ts
-tools.set('my_tool', {
+import { z } from 'zod';
+import { CoreToolDefinition, ToolContext } from './types';
+
+const schema = z.object({
+  input: z.string().describe('Description...')
+});
+
+export const myTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'my_tool',
   description: 'Description shown to the LLM.',
   annotations: { title: 'My Tool', readOnlyHint: true },
-  schema: z.object({ input: z.string().describe('...') }),
-  handler: async (args) => { return `result`; }
+  schema,
+  handler: async (args) => {
+    // args is strictly typed as { input: string }
+    return 'result';
+  }
 });
 ```
 
-See `packages/core/src/AGENTS.md` for `ToolAnnotations` rules and `ToolContext` API.
+Then, register it in `packages/core/src/core-tools.ts` under `registerCoreTools`. See `packages/core/src/AGENTS.md` for `ToolAnnotations` rules and `ToolContext` API.
 
 ### Add a plugin (external MCP tool server)
 

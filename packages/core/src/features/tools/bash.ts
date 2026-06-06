@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 
-export const bashTool = (ctx: ToolContext): CoreToolDefinition => ({
+const schema = z.object({
+  command: z.string().describe('The shell command to run')
+});
+
+export const bashTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'bash',
   annotations: { title: 'Bash', destructiveHint: true, openWorldHint: true },
   description: 'Run a bash command. Read-only commands (ls, git status, cat, etc.) run automatically. Commands that mutate state require explicit user confirmation.',
-  schema: z.object({
-    command: z.string().describe('The shell command to run')
-  }),
+  schema,
   handler: async (args) => {
     let { command } = args;
     ctx.resetConsecutiveReads();

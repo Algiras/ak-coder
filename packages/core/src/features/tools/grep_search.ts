@@ -1,14 +1,16 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 
-export const grepSearchTool = (ctx: ToolContext): CoreToolDefinition => ({
+const schema = z.object({
+  pattern: z.string().describe('The text pattern or regex to search for'),
+  path: z.string().describe('The directory path to search')
+});
+
+export const grepSearchTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'grep_search',
   annotations: { title: 'Grep Search', readOnlyHint: true, idempotentHint: true },
   description: 'Search for text matches within workspace files.',
-  schema: z.object({
-    pattern: z.string().describe('The text pattern or regex to search for'),
-    path: z.string().describe('The directory path to search')
-  }),
+  schema,
   handler: async (args) => {
     const searchPath = args.path || '.';
     const resolvedPath = ctx.resolveWorkspacePath(searchPath);

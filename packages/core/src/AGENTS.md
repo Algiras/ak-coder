@@ -5,21 +5,25 @@
 | File | Purpose |
 |------|---------|
 | `agent.ts` | `AgentCore` class — session lifecycle, `processMessage` ReAct loop, tool dispatch, compaction |
-| `core-tools.ts` | All 11 built-in tool definitions + `ToolContext` interface + `registerCoreTools()` factory |
+| `core-tools.ts` | All built-in tool definitions (delegated to `features/tools/`) + `ToolContext` interface + `registerCoreTools()` factory |
 | `ports.ts` | All port interfaces (`FileSystem`, `LLMService`, `SessionStore`, `TerminalIo`, `ProcessRunner`, `Logger`, `ToolAnnotations`) |
-| `confirmation.ts` | `ConfirmationPolicy` — 5 presets, gates writes/commands, delegates to `TerminalIo.confirm` |
-| `safety.ts` | `CommandSafetyGate` — classifies commands safe/unsafe, persists per-session authorizations |
-| `diff.ts` | Myers-diff engine for colored unified diffs shown before writes |
-| `hooks.ts` | `AgentHooks` interface (`beforeWriteFile`, `afterWriteFile`, `beforeExecuteCommand`, `afterExecuteCommand`, `beforeChat`, `afterChat`) |
-| `mcp.ts` | `McpClient` — spawns local MCP server processes, JSON-RPC over stdio |
-| `ignore.ts` | `.akcoderignore` / `.gitignore` pattern matching |
-| `vector-store.ts` | In-memory TF-IDF vector store for semantic search |
-| `indexer.ts` | `WorkspaceIndexer` — chunks files, produces embedding vectors |
+| `features/confirmation/confirmation.ts` | `ConfirmationPolicy` — 5 presets, gates writes/commands, delegates to `TerminalIo.confirm` |
+| `features/safety/safety.ts` | `CommandSafetyGate` — classifies commands safe/unsafe, persists per-session authorizations |
+| `features/diff/diff.ts` | Myers-diff engine for colored unified diffs shown before writes |
+| `features/hooks/hooks.ts` | `AgentHooks` interface (`beforeWriteFile`, `afterWriteFile`, `beforeExecuteCommand`, `afterExecuteCommand`, `beforeChat`, `afterChat`) |
+| `features/mcp/mcp.ts` | `McpClient` — spawns local MCP server processes, JSON-RPC over stdio |
+| `features/ignore/ignore.ts` | `.akcoderignore` / `.gitignore` pattern matching |
+| `features/history/vector-store.ts` | In-memory TF-IDF vector store for semantic search |
+| `features/history/indexer.ts` | `WorkspaceIndexer` — chunks files, produces embedding vectors |
+| `features/rules/rules.ts` | `RulesManager` — loads `AGENTS.md` rules |
+| `features/skills/skills.ts` | `SkillsManager` — loads `SKILL.md` custom slash commands |
+| `features/tools/` | Built-in tool handlers (e.g. `read_file.ts`, `write_file.ts`, `bash.ts`, etc.) |
 | `config.ts` | `ConfigManager` — loads/saves `~/.ak-coder/config.json` |
-| `history.ts` | `FileSessionStore` — serializes chat history to disk |
+| `features/history/history.ts` | `FileSessionStore` — serializes chat history to disk |
 | `logger.ts` | `FileLogger` — writes structured JSON logs with span tracing |
 | `registry.ts` | `DependencyRegistry` — service locator for adapters |
 | `mocks/` | `MockFileSystem`, `MockSessionStore`, `MockLogger`, `MockTerminalIo` for tests |
+
 
 ---
 

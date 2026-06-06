@@ -2,12 +2,14 @@ import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 import { WorkspaceIndexer } from '../history/indexer';
 
-export const indexWorkspaceTool = (ctx: ToolContext): CoreToolDefinition => ({
+const schema = z.object({
+  extensions: z.array(z.string()).optional().describe('File extensions to include (e.g. [".ts", ".md"]). Defaults to common code/text extensions.')
+});
+
+export const indexWorkspaceTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'index_workspace',
   description: 'Index the workspace files for semantic search. Call this once before using semantic_search. Respects .gitignore patterns.',
-  schema: z.object({
-    extensions: z.array(z.string()).optional().describe('File extensions to include (e.g. [".ts", ".md"]). Defaults to common code/text extensions.')
-  }),
+  schema,
   handler: async (args) => {
     const opts = args.extensions ? { extensions: args.extensions } : {};
     const indexer = new WorkspaceIndexer(ctx.vectorStore, opts);

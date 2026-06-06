@@ -1,15 +1,17 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 
-export const delegateTaskTool = (ctx: ToolContext): CoreToolDefinition => ({
+const schema = z.object({
+  role: z.string().describe('The specialized role of the sub-agent (e.g. "Security Auditor", "Test Runner")'),
+  taskPrompt: z.string().describe('The detailed instructions and objective of the task for the sub-agent'),
+  filesToInclude: z.array(z.string()).optional().describe("Relative paths of files to load in the sub-agent's context")
+});
+
+export const delegateTaskTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'delegate_task',
   annotations: { title: 'Delegate Task', openWorldHint: true },
   description: "Deploy a specialized sub-agent to execute a sub-task. Returns the sub-agent's findings.",
-  schema: z.object({
-    role: z.string().describe('The specialized role of the sub-agent (e.g. "Security Auditor", "Test Runner")'),
-    taskPrompt: z.string().describe('The detailed instructions and objective of the task for the sub-agent'),
-    filesToInclude: z.array(z.string()).optional().describe("Relative paths of files to load in the sub-agent's context")
-  }),
+  schema,
   handler: async (args) => {
     const { role, taskPrompt, filesToInclude } = args;
     const maxDepth = 3;

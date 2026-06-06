@@ -2,17 +2,19 @@ import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 import { DiffEngine } from '../diff/diff';
 
-export const patchFileTool = (ctx: ToolContext): CoreToolDefinition => ({
+const schema = z.object({
+  path: z.string().describe('The relative path of the file to edit'),
+  patches: z.array(z.object({
+    find: z.string().describe('The exact block of code to find (including whitespace and indentation)'),
+    replace: z.string().describe('The block of code to replace the "find" block with')
+  })).describe('List of search-and-replace patches to apply sequentially')
+});
+
+export const patchFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'patch_file',
   annotations: { title: 'Patch File', destructiveHint: true },
   description: 'Apply search-and-replace patches to a file. Highly preferred over write_file for editing existing files.',
-  schema: z.object({
-    path: z.string().describe('The relative path of the file to edit'),
-    patches: z.array(z.object({
-      find: z.string().describe('The exact block of code to find (including whitespace and indentation)'),
-      replace: z.string().describe('The block of code to replace the "find" block with')
-    })).describe('List of search-and-replace patches to apply sequentially')
-  }),
+  schema,
   handler: async (args) => {
     const resolvedPath = ctx.resolveWorkspacePath(args.path);
     ctx.resetConsecutiveReads();

@@ -1,15 +1,17 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 
-export const strReplaceTool = (ctx: ToolContext): CoreToolDefinition => ({
+const schema = z.object({
+  path: z.string().describe('Path to the file to edit'),
+  old_string: z.string().describe('The exact string to find and replace (must be unique in the file)'),
+  new_string: z.string().describe('The replacement string')
+});
+
+export const strReplaceTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'str_replace',
   annotations: { title: 'String Replace', destructiveHint: true },
   description: 'Replace an exact string in a file. Simpler than patch_file for targeted single-location edits. The file must have been read first.',
-  schema: z.object({
-    path: z.string().describe('Path to the file to edit'),
-    old_string: z.string().describe('The exact string to find and replace (must be unique in the file)'),
-    new_string: z.string().describe('The replacement string')
-  }),
+  schema,
   handler: async (args) => {
     const resolvedPath = ctx.resolveWorkspacePath(args.path);
     if (!ctx.readFiles.has(resolvedPath)) {

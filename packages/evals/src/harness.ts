@@ -49,11 +49,17 @@ export class EvalEnv {
   private _mcpServers: { name: string; command: string; args: string[] }[] = [];
   private _pluginManifests: { name: string; command: string; args: string[] }[] = [];
   private _skills: { path: string; content: string }[] = [];
+  private _confirmationPreset?: 'default' | 'yolo' | 'confirm-writes' | 'confirm-commands' | 'plan';
 
   files(map: Record<string, string>): this {
     for (const [path, content] of Object.entries(map)) {
       this.fs.files.set(path, content);
     }
+    return this;
+  }
+
+  withConfirmationPreset(preset: 'default' | 'yolo' | 'confirm-writes' | 'confirm-commands' | 'plan'): this {
+    this._confirmationPreset = preset;
     return this;
   }
 
@@ -129,6 +135,10 @@ export class EvalEnv {
       this.nio,
       effectiveRoot
     );
+
+    if (this._confirmationPreset) {
+      agent.setConfirmationMode(this._confirmationPreset);
+    }
 
     if (this._mcpServers.length > 0) {
       const config: Record<string, { command: string; args: string[] }> = {};

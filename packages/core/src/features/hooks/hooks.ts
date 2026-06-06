@@ -1,3 +1,5 @@
+import { ChatMessage } from '../../ports';
+
 export interface HookContext {
   sessionId: string;
   workspaceRoot: string;
@@ -26,7 +28,7 @@ export interface PostCommandContext extends HookContext {
 }
 
 export interface AgentHooks {
-  beforeChat?: (messages: any[], context: HookContext) => Promise<any[] | void> | any[] | void;
+  beforeChat?: (messages: ChatMessage[], context: HookContext) => Promise<ChatMessage[] | void> | ChatMessage[] | void;
   afterChat?: (response: string, context: HookContext) => Promise<string | void> | string | void;
   beforeWriteFile?: (context: PreWriteContext) => Promise<{ content?: string; cancel?: boolean } | void> | { content?: string; cancel?: boolean } | void;
   afterWriteFile?: (context: PostWriteContext) => Promise<void> | void;

@@ -122,6 +122,47 @@ describe('PluginSDK Zod Flow', () => {
     });
   });
 
+  it('should correctly convert complex schemas (enums, arrays, nullable) to JSON schemas', async () => {
+    const sdk = new PluginSDK();
+    
+    sdk.registerTool({
+      name: 'complex_tool',
+      description: 'Test complex schemas',
+      schema: z.object({
+        tags: z.array(z.string()).describe('List of tags'),
+        status: z.enum(['active', 'inactive']).describe('Current status'),
+        notes: z.string().nullable().describe('Optional notes')
+      }),
+      handler: () => 'ok'
+    });
+
+    const mockStdin = new Readable({ read() {} });
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: mockStdin, writable: true, configurable: true });
+
+    sdk.start();
+
+    mockStdin.push(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) + '\n');
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const res = JSON.parse(stdoutData[0].trim());
+    const schema = res.result.tools[0].inputSchema;
+
+    expect(schema.type).toBe('object');
+    expect(schema.properties.tags.type).toBe('array');
+    expect(schema.properties.tags.items.type).toBe('string');
+    expect(schema.properties.tags.description).toBe('List of tags');
+    
+    expect(schema.properties.status.type).toBe('string');
+    expect(schema.properties.status.enum).toEqual(['active', 'inactive']);
+    expect(schema.properties.status.description).toBe('Current status');
+    
+    expect(schema.properties.notes.type).toBe('string');
+    expect(schema.properties.notes.description).toBe('Optional notes');
+
+    Object.defineProperty(process, 'stdin', { value: originalStdin, writable: true, configurable: true });
+  });
+
   it('should respond to tools/list with registered tools', async () => {
     const sdk = new PluginSDK();
     sdk.registerTool({

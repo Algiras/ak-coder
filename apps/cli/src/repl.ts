@@ -349,9 +349,11 @@ export const COMMANDS: Record<string, ReplCommand> = {
         if (choice === 'suggest') {
           msgText = `Review the following plan and suggest improvements, gaps, or risks:\n\n${sub}`;
         } else if (choice === 'fresh') {
+          core.setConfirmationMode('default');
           await core.startSession(`session-${Date.now()}`);
           msgText = `Working from this plan:\n\n${sub}\n\nProceed with implementation.`;
         } else {
+          core.setConfirmationMode('default');
           msgText = `Continuing with this plan in mind:\n\n${sub}`;
         }
         let firstChunk = true;

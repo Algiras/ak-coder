@@ -22,5 +22,5 @@ jobs:
       - name: Install Dependencies
         run: bun install
 
-      - name: Run Tests
-        run: bun test
+      - name: Run Tests with Coverage Check
+        run: bun run test:coverage:check

@@ -2,14 +2,16 @@ import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 import { DiffEngine } from '../diff/diff';
 
-export const writeFileTool = (ctx: ToolContext): CoreToolDefinition => ({
+const schema = z.object({
+  path: z.string().describe('The relative path of the file to write'),
+  content: z.string().describe('The complete new content to write')
+});
+
+export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'write_file',
   annotations: { title: 'Write File', destructiveHint: true },
   description: 'Write complete new content to a file. A unified diff will be shown and requires explicit user confirmation. You must read the file first in the current session before writing.',
-  schema: z.object({
-    path: z.string().describe('The relative path of the file to write'),
-    content: z.string().describe('The complete new content to write')
-  }),
+  schema,
   handler: async (args) => {
     const resolvedPath = ctx.resolveWorkspacePath(args.path);
     let { content } = args;

@@ -1,14 +1,16 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 
-export const webFetchTool = (ctx: ToolContext): CoreToolDefinition => ({
+const schema = z.object({
+  url: z.string().describe('The URL to fetch'),
+  maxLength: z.number().optional().describe('Maximum characters to return (default 8000)')
+});
+
+export const webFetchTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'web_fetch',
   annotations: { title: 'Web Fetch', readOnlyHint: true, openWorldHint: true, idempotentHint: true },
   description: 'Fetch the text content of a URL. Returns the page body (HTML stripped to text). Use for reading documentation, READMEs, npm package pages, GitHub issues, etc.',
-  schema: z.object({
-    url: z.string().describe('The URL to fetch'),
-    maxLength: z.number().optional().describe('Maximum characters to return (default 8000)')
-  }),
+  schema,
   handler: async (args) => {
     try {
       const response = await fetch(args.url, {
