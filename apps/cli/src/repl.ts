@@ -16,6 +16,7 @@
  */
 
 import { AgentCore, LLMService, SessionStore, ProcessRunner, TerminalIo } from '@ak-coder/core';
+import type { StreamChunk } from '@ak-coder/core';
 import { NodeTerminalIo } from './adapters/terminal';
 import { writePlanFile, listPlans, readPlan } from './plan-file';
 
@@ -33,6 +34,25 @@ export interface CommandContext {
 interface ReplCommand {
   description: string;
   handler(args: string, ctx: CommandContext): Promise<void>;
+}
+
+function createStreamChunkWriter() {
+  let thinkingOpen = false;
+  return (chunk: StreamChunk) => {
+    if (chunk.type === 'thinking') {
+      if (!thinkingOpen) {
+        process.stdout.write('\n\x1b[35m╭─ Thinking ─────────────────────────────\x1b[0m\n');
+        thinkingOpen = true;
+      }
+      process.stdout.write(`\x1b[90m\x1b[3m${chunk.text}\x1b[0m`);
+      return;
+    }
+    if (thinkingOpen) {
+      process.stdout.write('\n\x1b[35m╰──────────────────────────────────────\x1b[0m\n');
+      thinkingOpen = false;
+    }
+    process.stdout.write(chunk.text);
+  };
 }
 
 export interface ReplOptions {
@@ -357,13 +377,10 @@ export const COMMANDS: Record<string, ReplCommand> = {
           msgText = `Continuing with this plan in mind:\n\n${sub}`;
         }
         let firstChunk = true;
+        const writeChunk = createStreamChunkWriter();
         const response = await core.processMessage(msgText, [], (chunk) => {
           if (firstChunk) { process.stdout.write('\r\x1b[2K'); firstChunk = false; }
-          if (chunk.type === 'thinking') {
-            process.stdout.write(`\x1b[90m${chunk.text}\x1b[0m`);
-          } else {
-            process.stdout.write(chunk.text);
-          }
+          writeChunk(chunk);
         });
         process.stdout.write('\n');
         nio.write(`\x1b[90mTokens: ${response.inputTokens} in / ${response.outputTokens} out | Est Cost: $${response.cost.toFixed(5)}\x1b[0m\n`);
@@ -480,13 +497,8 @@ export const COMMANDS: Record<string, ReplCommand> = {
         const subSessionId = `sub-${Date.now()}`;
         await child.startSession(subSessionId);
 
-        const result = await child.processMessage(`Begin task: ${taskPrompt}`, [], (chunk) => {
-          if (chunk.type === 'thinking') {
-            process.stdout.write(`\x1b[90m${chunk.text}\x1b[0m`);
-          } else {
-            process.stdout.write(chunk.text);
-          }
-        });
+        const writeChunk = createStreamChunkWriter();
+        const result = await child.processMessage(`Begin task: ${taskPrompt}`, [], writeChunk);
         process.stdout.write('\n');
         nio.write(`\x1b[35m[Sub-agent "${role}" finished]\x1b[0m`);
         nio.write(`\x1b[90mTokens: ${result.inputTokens} in / ${result.outputTokens} out\x1b[0m`);
@@ -771,6 +783,7 @@ export async function runRepl(core: AgentCore, nio: NodeTerminalIo, opts: ReplOp
   async function runMessage(userText: string): Promise<{ inputTokens: number; outputTokens: number; cost: number } | null> {
     const t0 = Date.now();
     let firstChunk = true;
+    const writeChunk = createStreamChunkWriter();
     try {
       const response = await core.processMessage(userText, [], (chunk) => {
         if (firstChunk) {
@@ -778,11 +791,7 @@ export async function runRepl(core: AgentCore, nio: NodeTerminalIo, opts: ReplOp
           process.stdout.write('\r\x1b[2K');
           firstChunk = false;
         }
-        if (chunk.type === 'thinking') {
-          process.stdout.write(`\x1b[90m${chunk.text}\x1b[0m`);
-        } else {
-          process.stdout.write(chunk.text);
-        }
+        writeChunk(chunk);
       });
       process.stdout.write('\n');
       lastTurn = { ms: Date.now() - t0, outputTokens: response.outputTokens };

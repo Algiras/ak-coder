@@ -1,4 +1,5 @@
 import { LLMService, ChatMessage, StreamCallback } from '../ports';
+import { ChannelStreamParser, stripChannelMarkers } from './stream-channels';
 
 function extractThinkingFromDelta(delta: Record<string, unknown>): string {
   const parts: string[] = [];
@@ -25,6 +26,25 @@ function extractThinkingFromMessage(message: Record<string, unknown>): string {
 function emitStreamChunk(stream: StreamCallback | undefined, type: 'content' | 'thinking', text: string): void {
   if (!text || !stream) return;
   stream({ type, text });
+}
+
+function emitContentChunk(
+  stream: StreamCallback | undefined,
+  parser: ChannelStreamParser,
+  chunk: string,
+  onThinking: (text: string) => void,
+  onContent: (text: string) => void
+): void {
+  if (!chunk) return;
+  parser.feed(chunk, (type, text) => {
+    if (type === 'thinking') {
+      onThinking(text);
+      emitStreamChunk(stream, 'thinking', text);
+    } else {
+      onContent(text);
+      emitStreamChunk(stream, 'content', text);
+    }
+  });
 }
 
 export class OpenAICompatibleLLMService implements LLMService {
@@ -115,6 +135,7 @@ export class OpenAICompatibleLLMService implements LLMService {
     let text = '';
     let thinking = '';
     let tool_calls: any[] = [];
+    const channelParser = new ChannelStreamParser();
 
     if (options?.stream && response.body) {
       const reader = response.body.getReader();
@@ -149,8 +170,13 @@ export class OpenAICompatibleLLMService implements LLMService {
               }
               const chunk = delta.content || '';
               if (chunk) {
-                text += chunk;
-                emitStreamChunk(options.stream, 'content', chunk);
+                emitContentChunk(
+                  options.stream,
+                  channelParser,
+                  chunk,
+                  (part) => { thinking += part; },
+                  (part) => { text += part; }
+                );
               }
               const tcChunk = delta.tool_calls;
               if (tcChunk) {
@@ -178,12 +204,27 @@ export class OpenAICompatibleLLMService implements LLMService {
           }
         }
       }
+      channelParser.flush((type, textPart) => {
+        if (type === 'thinking') {
+          thinking += textPart;
+          emitStreamChunk(options.stream, 'thinking', textPart);
+        } else {
+          text += textPart;
+          emitStreamChunk(options.stream, 'content', textPart);
+        }
+      });
     } else {
       const data = await response.json() as any;
       const message = data.choices?.[0]?.message ?? {};
       text = message.content || '';
       thinking = extractThinkingFromMessage(message);
       if (thinking) emitStreamChunk(options?.stream, 'thinking', thinking);
+      const stripped = stripChannelMarkers(text);
+      if (stripped.thinking) {
+        thinking = thinking ? `${thinking}${stripped.thinking}` : stripped.thinking;
+        if (options?.stream) emitStreamChunk(options.stream, 'thinking', stripped.thinking);
+      }
+      text = stripped.content;
       if (text) emitStreamChunk(options?.stream, 'content', text);
       tool_calls = message.tool_calls || [];
     }

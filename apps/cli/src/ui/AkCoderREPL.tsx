@@ -30,6 +30,7 @@ import {
 import { HistorySearch } from './components/HistorySearch';
 import { MessageRenderer } from './components/MessageRenderer';
 import { SelectInteraction } from './components/SelectInteraction';
+import { ThinkingPanel } from './components/ThinkingPanel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -199,12 +200,7 @@ export function AkCoderREPL({
             renderMessage={renderMessage}
           />
           {streamingThinking && (
-            <Box flexDirection="column" marginTop={messages.length > 0 ? 1 : 0} marginLeft={2}>
-              <Text color="gray" bold>Thinking</Text>
-              <Box marginTop={0} flexDirection="column">
-                <StreamingMarkdown>{streamingThinking}</StreamingMarkdown>
-              </Box>
-            </Box>
+            <ThinkingPanel text={streamingThinking} />
           )}
           {streamingContent && (
             <Box flexDirection="column" marginTop={messages.length > 0 || streamingThinking ? 1 : 0}>

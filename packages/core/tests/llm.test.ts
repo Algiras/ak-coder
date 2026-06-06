@@ -73,4 +73,37 @@ describe('OpenAICompatibleLLMService fetch adapter', () => {
     expect(result.text).toBe('Answer');
     expect(result.thinking).toBe('Step 1. ');
   });
+
+  it('should split embedded channel markers in content stream', async () => {
+    globalThis.fetch = (async (_url: string, options: any) => {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"Hi "}}]}\n\n'
+          ));
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"<|channel>thought\\nCoT\\n<channel|>\\nAnswer"}}]}\n\n'
+          ));
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        }
+      });
+      return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    }) as any;
+
+    const service = new OpenAICompatibleLLMService('test-key', 'https://openrouter.ai/api/v1');
+    const thinking: string[] = [];
+    const content: string[] = [];
+    const result = await service.chat([{ role: 'user', content: 'test' }], {
+      stream: (chunk) => {
+        if (chunk.type === 'thinking') thinking.push(chunk.text);
+        if (chunk.type === 'content') content.push(chunk.text);
+      }
+    });
+
+    expect(thinking.join('')).toBe('CoT\n');
+    expect(content.join('')).toBe('Hi Answer');
+    expect(result.text).toBe('Hi Answer');
+    expect(result.thinking).toBe('CoT\n');
+  });
 });
