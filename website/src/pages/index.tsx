@@ -11,9 +11,9 @@ const features = [
       'Ollama (free, local), OpenRouter, Gemini, Groq, DeepSeek — or any OpenAI-compatible endpoint. Switch providers with one config line.',
   },
   {
-    title: '15 built-in tools',
+    title: '12 built-in tools',
     description:
-      'read_file, write_file, str_replace, patch_file, bash, glob, grep_search, semantic_search, web_fetch, delegate_task, plan mode, and more.',
+      'read_file, write_file, str_replace, patch_file, bash, glob, grep_search, semantic_search, web_fetch, delegate_task, and more — with parallel read-only execution.',
   },
   {
     title: 'Hexagonal architecture',
