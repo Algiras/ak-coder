@@ -20,7 +20,10 @@ jobs:
           bun-version: latest
 
       - name: Install Dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc --noEmit -p packages/core/tsconfig.json
 
       - name: Run Tests with Coverage Check
         run: bun run test:coverage:check
