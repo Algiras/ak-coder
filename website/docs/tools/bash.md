@@ -13,7 +13,9 @@ Runs shell commands in the workspace root.
 
 ## Safety gate
 
-Commands are classified as **safe** (read-only: `cat`, `ls`, `git status`, etc.) or **unsafe** (writes, network, destructive). Safe commands run without confirmation. Unsafe commands prompt for approval unless the session policy is `yolo`.
+Commands are classified as **safe** (read-only: `cat`, `ls`, `git status`, etc.) or **unsafe** (writes, network, destructive). Safe commands run without confirmation. Unsafe commands prompt for approval in default mode.
+
+See [Tool Annotations](/docs/tools/annotations) and [Confirmation Policy ADR](/docs/adrs/confirmation_policy) for how plan mode and presets interact with bash.
 
 Once you approve a command pattern, it is auto-approved for the rest of the session via the safety gate's pattern authorizer.
 
