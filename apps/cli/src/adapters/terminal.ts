@@ -1,5 +1,6 @@
 import { TerminalIo, ConfirmationRequest, ConfirmationResult } from '@ak-coder/core';
 import * as readline from 'readline';
+import { filterReplCompletions } from '../slash-commands';
 
 export class NodeTerminalIo implements TerminalIo {
   private rl: readline.Interface | null;
@@ -20,8 +21,7 @@ export class NodeTerminalIo implements TerminalIo {
       output: process.stdout,
       completer: (line: string) => {
         const completions = getCompletions ? getCompletions() : [];
-        const hits = completions.filter((c) => c.startsWith(line));
-        return [hits.length ? hits : completions, line];
+        return filterReplCompletions(line, completions);
       }
     });
   }

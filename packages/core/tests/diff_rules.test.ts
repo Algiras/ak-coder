@@ -39,7 +39,7 @@ describe('AgentCore with AGENTS.md Rules', () => {
     mockLlm = new MockLlmService();
     mockStore = new MockSessionStore();
     mockLogger = new MockLogger();
-    agent = new AgentCore(mockFs, mockLlm, mockStore, mockLogger);
+    agent = new AgentCore(mockFs, mockLlm, mockStore, mockLogger, undefined, undefined, '/');
   });
 
   it('should load AGENTS.md rules and append them to the system prompt', async () => {
@@ -72,5 +72,21 @@ Instruction list for this skill.`;
     expect(lastPrompt[0].content).toContain('Available Skills:');
     expect(lastPrompt[0].content).toContain('Skill Name: custom-test-skill');
     expect(lastPrompt[0].content).toContain('Instruction list for this skill.');
+  });
+
+  it('reloadSkills picks up newly added SKILL.md files', async () => {
+    await agent.startSession('reload-skills');
+    await agent.loadSkills('/');
+    expect(agent.getSkills()).toHaveLength(0);
+
+    await mockFs.writeFile('/skills/new/SKILL.md', `---
+name: new-skill
+description: Fresh skill
+---
+Do the thing.`);
+
+    const count = await agent.reloadSkills();
+    expect(count).toBe(1);
+    expect(agent.getSkills()[0]?.name).toBe('new-skill');
   });
 });

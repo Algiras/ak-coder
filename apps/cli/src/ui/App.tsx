@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useApp } from 'ink';
 import {
   ThemeProvider,
@@ -22,6 +22,7 @@ import {
 import { InkTerminalIo, InteractionEvent, SubAgentEvent } from './InkTerminalIo';
 import { COMMANDS, CommandContext } from '../repl';
 import { AkCoderREPL } from './AkCoderREPL';
+import { buildSlashCommands } from '../slash-commands';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -430,8 +431,14 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
         return;
       }
 
-      // /skills with no name — list available skills
+      // /skills with no name — list or reload
       if (rawName === 'skills') {
+        const sub = cmdArgs.trim().toLowerCase();
+        if (sub === 'reload') {
+          const count = await core.reloadSkills();
+          addMsg('system', `\x1b[36mReloaded ${count} skill(s).\x1b[0m`);
+          return;
+        }
         const skills = core.getSkills();
         if (skills.length === 0) {
           addMsg('system', '\x1b[90mNo skills loaded. Add SKILL.md files to .ak-coder/skills/\x1b[0m');
@@ -488,6 +495,11 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  const promptCommands = useMemo(
+    () => buildSlashCommands({ core }),
+    [core, messages.length, isLoading]
+  );
+
   return (
     <ThemeProvider initialState="dark">
     <AkCoderREPL
@@ -509,6 +521,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       onExit={handleExit}
       onCycleMode={handleCycleMode}
       onVimToggle={() => setVimMode(v => !v)}
+      promptCommands={promptCommands}
     />
     </ThemeProvider>
   );

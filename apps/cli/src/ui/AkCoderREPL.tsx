@@ -27,6 +27,7 @@ import {
   type StatusLineSegment,
   type PermissionRequestProps,
 } from '@claude-code-kit/ui';
+import type { SlashCommand } from '../slash-commands';
 import { HistorySearch } from './components/HistorySearch';
 import { MessageRenderer } from './components/MessageRenderer';
 import { SelectInteraction } from './components/SelectInteraction';
@@ -65,6 +66,7 @@ export interface AkCoderREPLProps {
   onExit: () => void;
   onCycleMode: () => void;
   onVimToggle: () => void;
+  promptCommands: SlashCommand[];
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -88,6 +90,7 @@ export function AkCoderREPL({
   onExit,
   onCycleMode,
   onVimToggle,
+  promptCommands,
 }: AkCoderREPLProps) {
   const { exit } = useApp();
   const [inputValue, setInputValue] = useState('');
@@ -166,32 +169,8 @@ export function AkCoderREPL({
     [onSubmit, onShellRun]
   );
 
-  // Build command list for PromptInput autocomplete (slash commands)
-  // The parent provides these via onSubmit; just surface names for typeahead
-  const promptCommands = [
-    { name: 'new', description: 'Start a new conversation' },
-    { name: 'exit', description: 'Exit the REPL' },
-    { name: 'help', description: 'Show available commands' },
-    { name: 'context', description: 'View context info' },
-    { name: 'history', description: 'List saved sessions' },
-    { name: 'resume', description: 'Resume a session' },
-    { name: 'rewind', description: 'Rewind conversation to a previous turn' },
-    { name: 'fork', description: 'Fork current session' },
-    { name: 'plan', description: 'Plan mode: /plan [on|off|list|<text>]' },
-    { name: 'stats', description: 'Token and latency stats' },
-    { name: 'budget', description: 'Cost summary' },
-    { name: 'diff', description: 'Show git diff' },
-    { name: 'ping', description: 'Check LLM latency' },
-    { name: 'vim', description: 'Toggle vim input mode' },
-    { name: 'compact', description: 'Compact conversation context' },
-    { name: 'btw', description: 'Ask a side question (no history impact)' },
-    { name: 'clear', description: 'Clear conversation history' },
-    { name: 'model', description: 'Switch LLM model (lists Ollama models if no arg)' },
-    { name: 'agent', description: 'Spawn a sub-agent: /agent <role> | <task>' },
-    { name: 'settings', description: 'View or change settings: /settings [key] [value]' },
-    { name: 'skills', description: 'List loaded skills or invoke: /skills:name [args]' },
-    { name: 'providers', description: 'Manage LLM providers: /providers [select <name> | set <name> <key> <value>]' },
-  ];
+  // Build command list for PromptInput autocomplete (slash commands + extensions)
+  const commands = promptCommands;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -279,7 +258,7 @@ export function AkCoderREPL({
               onChange={setInputValue}
               onSubmit={handleSubmit}
               disabled={isLoading || isBlocked}
-              commands={promptCommands}
+              commands={commands}
               history={history}
               vimMode={vimMode}
               multiline={true}

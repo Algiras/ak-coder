@@ -20,6 +20,7 @@ import type { StreamChunk } from '@ak-coder/core';
 import { runSubAgent } from '@ak-coder/core';
 import { NodeTerminalIo } from './adapters/terminal';
 import { writePlanFile, listPlans, readPlan } from './plan-file';
+import { buildReplCompletionLines } from './slash-commands';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -225,10 +226,32 @@ export const COMMANDS: Record<string, ReplCommand> = {
     }
   },
 
+  '/skills': {
+    description: 'List skills or reload: /skills reload',
+    handler: async (args, { core, nio }) => {
+      const sub = args.trim().toLowerCase();
+      if (sub === 'reload') {
+        const count = await core.reloadSkills();
+        nio.write(`\x1b[36mReloaded ${count} skill(s).\x1b[0m`);
+        return;
+      }
+      const skills = core.getSkills();
+      if (skills.length === 0) {
+        nio.write('No skills loaded. Add SKILL.md files anywhere under the workspace.');
+      } else {
+        nio.write('Available Skills (invoke as /skills:<name> [args]):');
+        for (const skill of skills) {
+          nio.write(`  /skills:${skill.name.padEnd(14)} - ${skill.description || 'No description provided.'}`);
+        }
+      }
+    }
+  },
+
   '/history': {
-    description: 'List saved sessions.',
+    description: 'List saved sessions for the current workspace.',
     handler: async (_args, { core, nio }) => {
       try {
+        nio.write(`\x1b[90mSessions for: ${core.getWorkspaceRoot()}\x1b[0m`);
         const sessions = await core.listSessions();
         if (sessions.length === 0) {
           nio.write('No saved sessions found.');
@@ -723,7 +746,13 @@ export const REPL_COMMAND_NAMES: string[] = [
   '/agent',
   '/settings',
   '/providers',
+  '/skills reload',
 ];
+
+/** Tab-completion strings including dynamic skill names. */
+export function getReplCommandNames(core: AgentCore): string[] {
+  return buildReplCompletionLines({ core });
+}
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
 

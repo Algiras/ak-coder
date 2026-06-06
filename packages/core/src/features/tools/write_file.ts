@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 import { DiffEngine } from '../diff/diff';
+import { isSkillFilePath } from '../skills/skills';
 
 const schema = z.object({
   path: z.string().describe('The relative path of the file to write'),
@@ -77,6 +78,12 @@ export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schem
       }
     }
 
-    return `Successfully wrote content to ${args.path}`;
+    if (writeSuccess && isSkillFilePath(resolvedPath)) {
+      await ctx.reloadSkills?.();
+    }
+
+    return writeSuccess && isSkillFilePath(resolvedPath)
+      ? `Successfully wrote content to ${args.path}. Skills reloaded.`
+      : `Successfully wrote content to ${args.path}`;
   }
 });

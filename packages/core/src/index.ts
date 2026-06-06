@@ -2,6 +2,7 @@ export * from './ports';
 export * from './registry';
 export * from './config';
 export * from './features/history/history';
+export * from './features/history/workspace-history';
 export * from './logger';
 export * from './adapters/llm';
 export * from './mocks';

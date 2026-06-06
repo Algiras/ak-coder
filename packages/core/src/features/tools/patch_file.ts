@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
 import { DiffEngine } from '../diff/diff';
+import { isSkillFilePath } from '../skills/skills';
 
 const schema = z.object({
   path: z.string().describe('The relative path of the file to edit'),
@@ -86,6 +87,11 @@ export const patchFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schem
           success: writeSuccess
         });
       }
+    }
+
+    if (writeSuccess && isSkillFilePath(resolvedPath)) {
+      await ctx.reloadSkills?.();
+      return `Successfully applied ${args.patches.length} patches to ${args.path}. Skills reloaded.`;
     }
 
     return `Successfully applied ${args.patches.length} patches to ${args.path}`;

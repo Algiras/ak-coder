@@ -143,6 +143,7 @@ export class AgentCore {
       markModified: () => { self.heuristicAuditor.markModified(); },
       markTestsExecuted: () => { self.heuristicAuditor.markTestsExecuted(); },
       resolveWorkspacePath: (p) => self.resolveWorkspacePath(p),
+      reloadSkills: () => self.loadSkills(self.workspaceRoot),
       createChildAgent: (sessionId) => {
         const child = new AgentCore(
           self.fs, self.llm, self.store, self.logger,
@@ -204,6 +205,15 @@ export class AgentCore {
 
   async loadSkills(workspaceRoot: string): Promise<void> {
     await this.skillsManager.loadSkills(workspaceRoot);
+  }
+
+  async reloadSkills(): Promise<number> {
+    await this.loadSkills(this.workspaceRoot);
+    return this.skillsManager.getSkills().length;
+  }
+
+  getWorkspaceRoot(): string {
+    return this.workspaceRoot;
   }
 
   async listSessions(): Promise<{ sessionId: string; timestamp: number }[]> {

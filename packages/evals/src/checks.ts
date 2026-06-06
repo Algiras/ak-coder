@@ -85,6 +85,19 @@ export function responseMatches(pattern: RegExp): StaticCriterion {
   };
 }
 
+export function skillInvoked(name: string): StaticCriterion {
+  return {
+    type: 'static',
+    description: `Skill "${name}" was invoked (Apply Skill message)`,
+    check: ({ messages }) =>
+      messages.some(m =>
+        m.role === 'user' &&
+        typeof m.content === 'string' &&
+        m.content.includes(`Apply Skill "${name}"`)
+      ),
+  };
+}
+
 export interface GoldenOptions {
   checkToolCalls?: boolean;
   checkFiles?: boolean;
@@ -216,5 +229,6 @@ export const check = {
   fileModified,
   responseContains,
   responseMatches,
+  skillInvoked,
   golden,
 };

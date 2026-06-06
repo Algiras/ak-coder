@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
+import { isSkillFilePath } from '../skills/skills';
 
 const schema = z.object({
   path: z.string().describe('Path to the file to edit'),
@@ -46,6 +47,10 @@ export const strReplaceTool = (ctx: ToolContext): CoreToolDefinition<typeof sche
     ctx.markModified();
     if (ctx.hooks.afterWriteFile) {
       await ctx.hooks.afterWriteFile({ path: resolvedPath, content: updated, sessionId: ctx.getSessionId() || '', workspaceRoot: ctx.workspaceRoot, success: true });
+    }
+    if (isSkillFilePath(resolvedPath)) {
+      await ctx.reloadSkills?.();
+      return `Edited ${args.path} successfully. Skills reloaded.`;
     }
     return `Edited ${args.path} successfully.`;
   }

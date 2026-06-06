@@ -1,6 +1,10 @@
 import { FileSystem } from '../../ports';
 import { Logger } from '../../ports';
 
+export function isSkillFilePath(filePath: string): boolean {
+  return filePath.replace(/\\/g, '/').endsWith('SKILL.md');
+}
+
 export interface SkillDefinition {
   name: string;
   description: string;

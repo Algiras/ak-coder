@@ -61,4 +61,5 @@ export interface ToolContext {
 
   // Sub-agent factory for delegate_task
   createChildAgent(sessionId: string): ChildAgent;
+  reloadSkills?: () => Promise<void>;
 }

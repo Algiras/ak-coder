@@ -11,7 +11,8 @@ import {
   FileSessionStore,
   FileLogger,
   OpenAICompatibleLLMService,
-  DockerProcessRunner
+  DockerProcessRunner,
+  resolveWorkspaceHistoryDir,
 } from '@ak-coder/core';
 import { NodeFileSystem } from './adapters/filesystem';
 import { NodeTerminalIo } from './adapters/terminal';
@@ -108,7 +109,8 @@ async function run() {
 
   // Initialize services using ports
   const llm = new OpenAICompatibleLLMService(config.apiKey, config.baseUrl, config.model);
-  const store = new FileSessionStore(nfs, path.join(globalConfigDir, 'history'));
+  const historyDir = resolveWorkspaceHistoryDir(path.join(globalConfigDir, 'history'), workspaceRoot);
+  const store = new FileSessionStore(nfs, historyDir);
   const logger = new FileLogger(nfs, logDir, 10 * 1024 * 1024, 5, debugEnabled ? 'debug' : 'info');
 
   // Register dependencies to Ports registry

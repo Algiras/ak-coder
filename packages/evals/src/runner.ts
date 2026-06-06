@@ -1,6 +1,6 @@
-import { OpenAICompatibleLLMService, ConfigManager } from '@ak-coder/core';
+import { OpenAICompatibleLLMService, ConfigManager, AgentCore } from '@ak-coder/core';
 import { LLMJudge } from './judge';
-import { EvalEnv, getRegistry } from './harness';
+import { EvalEnv, getRegistry, skillInvokePrompt, type EvalRunContext } from './harness';
 import type { EvalCase, EvalResult, CriterionResult } from './harness';
 import type { CheckContext } from './checks';
 import * as fs from 'fs/promises';
@@ -61,11 +61,38 @@ async function runEval(
 
     await agent.startSession(sessionId);
 
-    const prompts = Array.isArray(evalCase.prompts) ? evalCase.prompts : [evalCase.prompts];
+    const prompts = evalCase.prompts
+      ? (Array.isArray(evalCase.prompts) ? evalCase.prompts : [evalCase.prompts])
+      : [];
     let lastResult = { text: '', inputTokens: 0, outputTokens: 0 };
 
-    for (const prompt of prompts) {
-      lastResult = await agent.processMessage(prompt);
+    if (evalCase.run) {
+      const ctx: EvalRunContext = {
+        env,
+        agent,
+        async prompt(text: string) {
+          lastResult = await agent.processMessage(text);
+          return lastResult.text;
+        },
+        async invokeSkill(name: string, args = '') {
+          await agent.reloadSkills();
+          let skill = agent.getSkills().find(s => s.name === name);
+          if (!skill) {
+            skill = agent.getSkills().find(s => s.path?.includes(`/${name}/`) || s.path?.includes(`/${name.replace(/-skill$/, '')}/`));
+          }
+          if (!skill) {
+            const available = agent.getSkills().map(s => s.name).join(', ') || '(none)';
+            throw new Error(`Skill not found after reload: ${name}. Loaded: ${available}`);
+          }
+          lastResult = await agent.processMessage(skillInvokePrompt(skill, args));
+          return lastResult.text;
+        },
+      };
+      await evalCase.run(ctx);
+    } else {
+      for (const prompt of prompts) {
+        lastResult = await agent.processMessage(prompt);
+      }
     }
 
     const messages = agent.getMessages();
@@ -86,7 +113,11 @@ async function runEval(
         const pass = await criterion.check(ctx);
         criteriaResults.push({ type: 'static', description: criterion.description, pass });
       } else {
-        const result = await judge.evaluate(prompts[prompts.length - 1], lastResult.text, criterion.description);
+        const result = await judge.evaluate(
+          prompts[prompts.length - 1] ?? evalCase.name,
+          lastResult.text,
+          criterion.description
+        );
         criteriaResults.push({ type: 'judge', description: criterion.description, pass: result.pass, reasoning: result.reasoning });
       }
     }

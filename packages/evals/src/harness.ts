@@ -18,7 +18,9 @@ export interface EvalCase {
   name: string;
   timeout?: number;
   setup?: (env: EvalEnv) => void | Promise<void>;
-  prompts: string | string[];
+  prompts?: string | string[];
+  /** Custom multi-step run; when set, replaces the prompts loop. */
+  run?: (ctx: EvalRunContext) => Promise<void>;
   criteria: Criterion[];
 }
 
@@ -156,11 +158,24 @@ export class EvalEnv {
       this.fs.files.set(s.path, s.content);
     }
     if (this._skills.length > 0) {
-      await agent.loadSkills('/');
+      await agent.loadSkills(effectiveRoot);
     }
 
     return agent;
   }
+}
+
+export function skillInvokePrompt(skill: { name: string; content: string }, args = ''): string {
+  return args.trim()
+    ? `Apply Skill "${skill.name}" with arguments: "${args}"\n\nInstructions:\n${skill.content}`
+    : `Apply Skill "${skill.name}".\n\nInstructions:\n${skill.content}`;
+}
+
+export interface EvalRunContext {
+  env: EvalEnv;
+  agent: AgentCore;
+  prompt(text: string): Promise<string>;
+  invokeSkill(name: string, args?: string): Promise<string>;
 }
 
 const registry: EvalCase[] = [];
