@@ -220,7 +220,7 @@ export function AkCoderREPL({
           {streamingThinking && !subAgent && (
             <ThinkingPanel text={streamingThinking} />
           )}
-          {streamingContent && (
+          {streamingContent && !subAgent && (
             <Box flexDirection="column" marginTop={messages.length > 0 || streamingThinking || subAgent ? 1 : 0}>
               <Box>
                 <Text color="#DA7756">●</Text>
@@ -233,10 +233,11 @@ export function AkCoderREPL({
           )}
           {isLoading && !streamingContent && !streamingThinking && !subAgent && (
             <Box marginTop={messages.length > 0 ? 1 : 0} flexDirection="column">
-              {activityLabel && (
+              {activityLabel ? (
                 <Text color="cyan">  ⠋ {activityLabel}</Text>
+              ) : (
+                spinner ?? <Text color="cyan">  thinking…</Text>
               )}
-              {spinner ?? <Text color="cyan">  thinking…</Text>}
             </Box>
           )}
         </Box>

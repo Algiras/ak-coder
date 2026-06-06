@@ -1,5 +1,6 @@
 import { LLMService, ChatMessage, StreamCallback } from '../ports';
 import { ChannelStreamParser, stripChannelMarkers } from './stream-channels';
+import { appendStreamDelta } from './stream-delta';
 
 function extractThinkingFromDelta(delta: Record<string, unknown>): string {
   const parts: string[] = [];
@@ -134,6 +135,7 @@ export class OpenAICompatibleLLMService implements LLMService {
 
     let text = '';
     let thinking = '';
+    let rawContent = '';
     let tool_calls: any[] = [];
     const channelParser = new ChannelStreamParser();
 
@@ -165,18 +167,23 @@ export class OpenAICompatibleLLMService implements LLMService {
               const delta = choice?.delta ?? {};
               const thinkingChunk = extractThinkingFromDelta(delta);
               if (thinkingChunk) {
-                thinking += thinkingChunk;
-                emitStreamChunk(options.stream, 'thinking', thinkingChunk);
+                const merged = appendStreamDelta(thinking, thinkingChunk);
+                thinking = merged.value;
+                if (merged.delta) emitStreamChunk(options.stream, 'thinking', merged.delta);
               }
               const chunk = delta.content || '';
               if (chunk) {
-                emitContentChunk(
-                  options.stream,
-                  channelParser,
-                  chunk,
-                  (part) => { thinking += part; },
-                  (part) => { text += part; }
-                );
+                const merged = appendStreamDelta(rawContent, chunk);
+                rawContent = merged.value;
+                if (merged.delta) {
+                  emitContentChunk(
+                    options.stream,
+                    channelParser,
+                    merged.delta,
+                    (part) => { thinking += part; },
+                    (part) => { text += part; }
+                  );
+                }
               }
               const tcChunk = delta.tool_calls;
               if (tcChunk) {

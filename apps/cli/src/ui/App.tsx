@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from 'ink';
 import {
-  Spinner,
   ThemeProvider,
   type StatusLineSegment,
   type Message,
@@ -105,6 +104,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
   const [subAgent, setSubAgent] = useState<SubAgentState | null>(null);
   const streamRef = useRef('');
   const thinkingRef = useRef('');
+  const prevActivityRef = useRef<string | null>(null);
   const historyRef = useRef<string[]>([]);
   const interruptedRef = useRef(false);
   // AbortController is a global in Bun/Node 18+ — type assertion for tsc
@@ -114,9 +114,14 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     setMessages(prev => [...prev, mkMsg(role, content)]);
   }, []);
 
-  // ── Status bar ──────────────────────────────────────────────────────────────
+  const clearStreaming = useCallback(() => {
+    streamRef.current = '';
+    thinkingRef.current = '';
+    setStreaming(null);
+    setStreamingThinking(null);
+  }, []);
 
-  const [spinnerVerbs, setSpinnerVerbs] = useState(['Thinking', 'Working', 'Processing']);
+  // ── Status bar ──────────────────────────────────────────────────────────────
 
   const statusSegments = useStatusLine((): StatusLineSegment[] => {
     const { contextPct, mode } = core.getStatus();
@@ -146,10 +151,17 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       addMsg(error ? 'system' : (role ?? 'system'), text);
     };
     const onActivity = ({ label }: { label: string | null }) => {
+      if (label !== prevActivityRef.current) {
+        if (prevActivityRef.current != null && label != null) {
+          clearStreaming();
+        }
+        prevActivityRef.current = label;
+      }
       setActivityLabel(label);
     };
     const onSubAgent = (ev: SubAgentEvent) => {
       if (ev.type === 'start') {
+        clearStreaming();
         setSubAgent({
           role: ev.role,
           depth: ev.depth,
@@ -197,7 +209,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       nio.off('activity', onActivity);
       nio.off('subagent', onSubAgent);
     };
-  }, [nio, addMsg]);
+  }, [nio, addMsg, clearStreaming]);
 
   useEffect(() => {
     const onInteraction = (ev: InteractionEvent) => {
@@ -251,17 +263,6 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     nio.on('interaction', onInteraction);
     return () => nio.off('interaction', onInteraction);
   }, [nio]);
-
-  // ── Compaction spinner verbs ────────────────────────────────────────────────
-
-  useEffect(() => {
-    core.onCompactingStart = () => setSpinnerVerbs(['Compacting', 'Summarizing', 'Archiving']);
-    core.onCompactingEnd  = () => {
-      const { mode } = core.getStatus();
-      setSpinnerVerbs(mode === 'plan' ? ['Planning', 'Researching', 'Drafting'] : ['Thinking', 'Working', 'Processing']);
-    };
-    return () => { core.onCompactingStart = undefined; core.onCompactingEnd = undefined; };
-  }, [core]);
 
   // ── Core message runner ─────────────────────────────────────────────────────
 
@@ -456,7 +457,6 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     const idx = MODES.indexOf(mode as ConfirmationPreset);
     const next = MODES[(idx + 1) % MODES.length];
     core.setConfirmationMode(next);
-    setSpinnerVerbs(next === 'plan' ? ['Planning', 'Researching', 'Drafting'] : ['Thinking', 'Working', 'Processing']);
     addMsg('system', `Mode → ${next}`);
   }, [core, addMsg]);
 
@@ -502,9 +502,6 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       vimMode={vimMode}
       history={historyRef.current}
       activityLabel={activityLabel}
-      spinner={
-        <Spinner verbs={spinnerVerbs} color="cyan" showElapsed />
-      }
       assistantName={assistantName}
       onSubmit={handleSubmit}
       onShellRun={handleShellRun}

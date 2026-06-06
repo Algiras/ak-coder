@@ -106,4 +106,37 @@ describe('OpenAICompatibleLLMService fetch adapter', () => {
     expect(result.text).toBe('Hi Answer');
     expect(result.thinking).toBe('CoT\n');
   });
+
+  it('should not duplicate cumulative reasoning stream chunks', async () => {
+    globalThis.fetch = (async (_url: string, options: any) => {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"reasoning":"The user"}}]}\n\n'
+          ));
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"reasoning":"The user mentioned"}}]}\n\n'
+          ));
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"Done"}}]}\n\n'
+          ));
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        }
+      });
+      return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    }) as any;
+
+    const service = new OpenAICompatibleLLMService('test-key', 'https://openrouter.ai/api/v1');
+    const thinking: string[] = [];
+    const result = await service.chat([{ role: 'user', content: 'test' }], {
+      stream: (chunk) => {
+        if (chunk.type === 'thinking') thinking.push(chunk.text);
+      }
+    });
+
+    expect(thinking.join('')).toBe('The user mentioned');
+    expect(result.thinking).toBe('The user mentioned');
+    expect(result.text).toBe('Done');
+  });
 });
