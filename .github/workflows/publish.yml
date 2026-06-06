@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to publish (must match apps/cli/package.json version, e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
 
 jobs:
   publish:
@@ -11,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -23,8 +31,14 @@ jobs:
       - name: Run tests
         run: bun run test:coverage:check
 
-      - name: Build bundle
-        run: bun run build
+      - name: Prepare publish bundle
+        run: |
+          cp README.md apps/cli/README.md
+          bun run build
+        working-directory: apps/cli
+
+      - name: Verify tarball
+        run: bun publish --dry-run --access public
         working-directory: apps/cli
 
       - name: Publish to npm
