@@ -85,15 +85,32 @@ Or edit `~/.ak-coder/config.json` directly:
 
 ## Architecture
 
-ak-coder uses hexagonal architecture — the agent core never imports Node.js APIs directly. All I/O goes through port interfaces (`FileSystem`, `LLMService`, `ProcessRunner`, `TerminalIo`), making the core fast to test and easy to port.
+ak-coder uses hexagonal architecture — `AgentCore` never imports Node.js APIs directly; all I/O is routed through typed port interfaces that swap between test doubles and real adapters without touching business logic.
+
+**Ports** (`packages/core/src/ports.ts`): `FileSystem` · `TerminalIo` · `ProcessRunner` · `LLMService` · `SessionStore` · `Logger`
+
+**CLI adapters** (`apps/cli/src/adapters/`): `NodeFileSystem` (fs/promises) · `NodeProcessRunner` (child_process) · `NodeTerminalIo` (readline, piped mode) · `InkTerminalIo` (React/Ink rich UI) · `OpenAICompatibleLLMService` (Ollama, OpenRouter, etc.)
+
+**Data flow:** user message → `AgentCore` → ReAct loop → tool calls → port adapters → streamed response
 
 ```
 packages/
-  core/    — AgentCore, ports, tools, MCP client, vector store
-  sdk/     — Plugin SDK for building extensions
-  evals/   — LLM-as-judge eval harness
+  core/    — AgentCore, ports, ReAct loop
+             tools/    — 15 tools: read_file, write_file, str_replace, patch_file,
+                         bash, glob, grep_search, semantic_search, list_directory,
+                         web_fetch, delegate_task, plan, index_workspace
+             history/  — session persistence, TF-IDF vector store, semantic indexer
+             skills/   — custom slash commands loaded from SKILL.md files
+             rules/    — workspace rules from AGENTS.md / CLAUDE.md
+             mcp/      — MCP client for plugin local servers
+             hooks/    — plugin lifecycle hooks (beforeWriteFile, afterWriteFile, …)
+             confirmation/ — per-action approval policy
+             safety/   — path safety, ignore patterns
+  sdk/     — plugin.json manifest format; PluginLoader (~/.ak-coder/plugins/)
+  evals/   — LLM-as-judge harness: 18 eval cases, multi-provider reports,
+             golden snapshot tests
 apps/
-  cli/     — Node.js terminal REPL
+  cli/     — Node.js terminal REPL (Ink UI + readline fallback)
 ```
 
 See the [Architecture ADRs](https://algiras.github.io/ak-coder/docs/adrs) for design decisions.
