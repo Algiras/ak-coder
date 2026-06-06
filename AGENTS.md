@@ -13,8 +13,18 @@ packages/
   evals/       — LLM-as-judge eval harness (Ollama-backed)
 apps/
   cli/         — Node.js terminal REPL + startup wiring
+website/       — Docusaurus docs site (deployed to GitHub Pages)
+  docs/        — All user-facing documentation (source of truth)
+    getting-started/  — installation, configuration, first-run
+    tools/            — built-in tool reference
+    providers/        — Ollama, OpenRouter, Gemini, Groq, DeepSeek
+    plugins/          — plugin & skill authoring
+    evals/            — eval harness usage
+    architecture/     — system flow diagrams (Mermaid)
+    adrs/             — Architecture Decision Records
 docs/
-  adrs/        — Architecture Decision Records
+  milestones/  — internal project milestones (not user-facing)
+  prds/        — internal product requirement docs (not user-facing)
 ```
 
 ## Build & Test
