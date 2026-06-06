@@ -16,6 +16,7 @@ const sidebars: SidebarsConfig = {
       label: 'Tools',
       items: [
         'tools/index',
+        'tools/annotations',
         'tools/read-write',
         'tools/bash',
         'tools/search',
