@@ -9,6 +9,7 @@ We implement `forkSession(turnIndex, newSessionId?)` on both `AgentCore` and the
 2. **Auto-generated IDs**: If `newSessionId` is omitted, the fork is named `fork-<original>-<timestamp>` so forks are traceable to their parent.
 3. **Port-level contract**: `SessionStore.forkSession` is declared in `ports.ts` so all storage backends (in-memory mock, file-based, future DB) must implement it identically.
 4. **REPL access**: `/fork [index]` in the CLI REPL forks the active session; `/fork` without an index defaults to the last turn.
+5. **Workspace-scoped storage** (since 0.1.8): Session files live under `~/.ak-coder/history/workspaces/<folder>-<hash>/` keyed by cwd at startup. `/history` and `/resume` only list sessions for the current workspace.
 
 ## Consequences
 * **Non-destructive exploration**: The original session is never modified; forks are independent branches.

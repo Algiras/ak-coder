@@ -17,17 +17,19 @@ See [Running Evals](/docs/evals/running) for filters, CI usage, and troubleshoot
 
 ## What evals test
 
-18 built-in eval cases covering:
+19 built-in eval cases covering:
 
 | Area | Cases |
 |------|-------|
 | File tools | `read_file`, `write_file`, `str_replace`, `patch_file` |
 | Shell | `bash` (echo, read-only gate) |
 | Search | `glob`, `grep_search`, `semantic_search` |
-| Agent | `delegate_task`, plan mode, skills |
+| Agent | `delegate_task`, plan mode, skills (load + create/invoke) |
 | Session | Multi-turn context, compaction retention |
 | Network | `web_fetch` real URL |
 | Snapshots | Golden file-state comparisons |
+
+The **skills** evals include a multi-step case where the agent creates a `SKILL.md`, reloads, and invokes it via the same `Apply Skill` message the REPL uses.
 
 ## Criterion types
 
@@ -35,7 +37,7 @@ See [Running Evals](/docs/evals/running) for filters, CI usage, and troubleshoot
 
 **Judge** (`judge(...)`) — LLM-graded: a local Ollama model evaluates the agent's response against a natural-language criterion.
 
-See [Writing Evals](/docs/evals/writing-evals) for the full API — `check.toolCalled`, `check.fileContains`, `check.responseMatches`, custom criteria, and snapshot tests.
+See [Writing Evals](/docs/evals/writing-evals) for the full API — `check.toolCalled`, `check.fileContains`, `check.skillInvoked`, custom `run()` flows, and snapshot tests.
 
 ## Related docs
 

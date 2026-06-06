@@ -26,7 +26,7 @@ evals/
   session.eval.ts       — multi-turn context + compaction retention
   semantic_search.eval.ts — index_workspace + semantic_search tool
   delegate_task.eval.ts — delegate_task sub-agent spawning
-  skills.eval.ts        — SKILL.md instruction injection
+  skills.eval.ts        — SKILL.md load + create/reload/invoke (run + invokeSkill)
   web_fetch.eval.ts     — web_fetch tool: real URL fetch
   golden.eval.ts        — golden snapshot: file-state consistency check
 goldens/
@@ -64,6 +64,22 @@ evalCase('feature: description of what the agent should do', {
 ```
 
 `run.ts` auto-discovers all `*.eval.ts` files — no registration needed.
+
+For multi-step flows (create file → reload skills → invoke), use `run` instead of `prompts`:
+
+```ts
+evalCase('skills: create SKILL.md, reload, and invoke', {
+  setup: (env) => env.confirmAll(),
+  run: async ({ prompt, invokeSkill, agent }) => {
+    await prompt('Use write_file to create .ak-coder/skills/howdy/SKILL.md …');
+    await agent.reloadSkills();
+    await invokeSkill('howdy-skill', 'say hello in one word');
+  },
+  criteria: [check.skillInvoked('howdy-skill'), /* … */],
+});
+```
+
+`invokeSkill(name, args)` mirrors the REPL `/skills:<name>` message format. `check.skillInvoked(name)` asserts the conversation contains `Apply Skill "<name>"`.
 
 ---
 

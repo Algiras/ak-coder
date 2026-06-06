@@ -21,8 +21,8 @@ ak-coder connects to any OpenAI-compatible LLM and gives it a full set of develo
 | [Tools](/docs/tools) | All 12 built-in tools and [annotations](/docs/tools/annotations) |
 | [Providers](/docs/providers) | Ollama, OpenRouter, Gemini, Groq, DeepSeek |
 | [Plugins & Skills](/docs/plugins) | MCP plugins and `SKILL.md` slash commands |
-| [Eval Harness](/docs/evals) | LLM-as-judge eval suite (18 cases) |
-| [Architecture](/docs/architecture/flows) | ReAct loop, confirmation flow, MCP, compaction |
+| [Eval Harness](/docs/evals) | LLM-as-judge eval suite (19 cases) |
+| [Architecture](/docs/architecture/flows) | ReAct loop, sessions, skills reload, slash completion, streaming |
 | [ADRs](/docs/adrs) | Architecture decision records |
 
 ## Quick links
