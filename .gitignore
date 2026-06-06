@@ -19,4 +19,4 @@ build/
 Thumbs.db
 
 # Env files
-.env
+.envwebsite/.docusaurus
