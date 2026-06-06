@@ -1,0 +1,6 @@
+#!/bin/sh
+# Strip Cursor IDE co-author trailers so they don't appear on GitHub.
+# Enable: git config core.hooksPath .githooks
+tmp="$(mktemp)"
+grep -vi '^co-authored-by: cursor <cursoragent@cursor.com>$' "$1" > "$tmp"
+mv "$tmp" "$1"

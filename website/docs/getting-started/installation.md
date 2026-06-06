@@ -23,9 +23,7 @@ Or with npm/npx:
 npx @algiras/ak-coder
 ```
 
-:::tip Corporate / custom npm registry
-
-If `bunx` or `npx` fails with `ConnectionRefused` or tries to reach a private registry (e.g. `npm.dev.wixpress.com`), your global `~/.npmrc` is overriding the public registry. Point at npmjs for this package:
+**Corporate / custom npm registry:** if `bunx` or `npx` fails with `ConnectionRefused` or tries to reach a private registry (e.g. `npm.dev.wixpress.com`), your global `~/.npmrc` is overriding the public registry. Point at npmjs for this package:
 
 ```bash
 NPM_CONFIG_REGISTRY=https://registry.npmjs.org bunx @algiras/ak-coder
@@ -37,8 +35,6 @@ Or install globally with an explicit registry:
 ```bash
 npm install -g @algiras/ak-coder --registry https://registry.npmjs.org
 ```
-
-:::
 
 ## Install globally
 
