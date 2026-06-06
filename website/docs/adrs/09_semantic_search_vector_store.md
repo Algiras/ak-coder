@@ -19,7 +19,7 @@ We decided to implement a pure TypeScript in-memory vector store based on TF-IDF
 ## Consequences
 - **Pros**:
   - Zero external dependencies. Starts instantly and consumes minimal memory.
-  - Very fast searches for typical workspace directory sizes (<10,000 chunks).
+  - Very fast searches for typical workspace directory sizes (under 10,000 chunks).
   - Easy to unit test and mock.
 - **Cons**:
   - Not suitable for huge codebases (e.g. monorepos with hundreds of thousands of files), where term frequency matrix allocations can exceed Node.js heap limits.
