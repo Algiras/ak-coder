@@ -9,11 +9,12 @@ export class FileLogger implements Logger {
     private fs: FileSystem, 
     private logDir: string, 
     maxSizeBytes: number = 10 * 1024 * 1024, 
-    maxBackupFiles: number = 5
+    maxBackupFiles: number = 5,
+    level: string = 'info'
   ) {
     this.logPath = `${this.logDir.replace(/\/$/, '')}/agent.log`;
     this.winstonLogger = winston.createLogger({
-      level: 'info',
+      level,
       format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.json()
@@ -39,6 +40,10 @@ export class FileLogger implements Logger {
   error(message: string, error?: any): void {
     const meta = error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error;
     this.winstonLogger.error(message, meta);
+  }
+
+  debug(message: string, meta?: any): void {
+    this.winstonLogger.debug(message, meta);
   }
 
   startSpan(name: string): string {

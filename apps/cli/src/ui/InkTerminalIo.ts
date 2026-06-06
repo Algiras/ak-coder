@@ -1,4 +1,5 @@
 import { TerminalIo, ConfirmationRequest, ConfirmationResult, StreamChunk } from '@ak-coder/core';
+import { trace } from '../debug';
 
 // Minimal EventEmitter shim so we don't require @types/node
 class TypedEmitter {
@@ -55,26 +56,32 @@ export class InkTerminalIo extends TypedEmitter implements TerminalIo {
 
   setActivity(label: string): void {
     if (this._subAgentDepth > 0) {
+      trace('ui.subagent.activity', { label, depth: this._subAgentDepth });
       this.emit('subagent', { type: 'activity', label } satisfies SubAgentEvent);
       return;
     }
+    trace('ui.activity', { label });
     this.emit('activity', { label });
   }
 
   clearActivity(): void {
     if (this._subAgentDepth > 0) {
+      trace('ui.subagent.activity.clear', { depth: this._subAgentDepth });
       this.emit('subagent', { type: 'activity', label: '' } satisfies SubAgentEvent);
       return;
     }
+    trace('ui.activity.clear', {});
     this.emit('activity', { label: null });
   }
 
   beginSubAgent(info: { role: string; depth: number }): void {
     this._subAgentDepth++;
+    trace('ui.subagent.start', info);
     this.emit('subagent', { type: 'start', ...info } satisfies SubAgentEvent);
   }
 
   subAgentStream(chunk: StreamChunk): void {
+    trace('ui.subagent.stream', { type: chunk.type, len: chunk.text.length });
     this.emit('subagent', { type: 'stream', chunk } satisfies SubAgentEvent);
   }
 
@@ -86,6 +93,11 @@ export class InkTerminalIo extends TypedEmitter implements TerminalIo {
     transcript?: 'assistant' | 'system' | 'silent';
   }): void {
     this._subAgentDepth = Math.max(0, this._subAgentDepth - 1);
+    trace('ui.subagent.end', {
+      role: info.role,
+      transcript: info.transcript,
+      summaryLen: info.summary?.length ?? 0
+    });
     this.emit('subagent', { type: 'end', ...info } satisfies SubAgentEvent);
   }
 

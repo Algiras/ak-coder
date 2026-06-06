@@ -133,6 +133,7 @@ export interface Logger {
   info(message: string, meta?: any): void;
   warn(message: string, meta?: any): void;
   error(message: string, error?: any): void;
+  debug(message: string, meta?: any): void;
   startSpan(name: string): string;
   endSpan(spanId: string): void;
   rotate(): Promise<void>;

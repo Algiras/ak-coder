@@ -549,11 +549,14 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
       } else {
         for (const { tc, args } of toolCallsWithArgs) {
           showToolActivity(this.terminalIo, formatToolCall(tc.function.name, args));
+          this.logger.debug('Tool call started', { tool: tc.function.name, args });
           let content: string;
           try {
             content = await this.executeSingleTool(tc.id, tc.function.name, args);
+            this.logger.debug('Tool call finished', { tool: tc.function.name, contentLength: content.length });
           } catch (e) {
             content = `Error: ${(e as Error).message}`;
+            this.logger.debug('Tool call failed', { tool: tc.function.name, error: (e as Error).message });
           }
           if (signal?.aborted) throw new DOMException('Interrupted', 'AbortError');
           this.messages.push({ role: 'tool', tool_call_id: tc.id, name: tc.function.name, content });

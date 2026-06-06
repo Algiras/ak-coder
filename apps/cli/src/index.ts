@@ -21,6 +21,7 @@ import { REPL_COMMAND_NAMES } from './repl';
 import { writePlanFile } from './plan-file';
 import { InkTerminalIo } from './ui/InkTerminalIo';
 import { App } from './ui/App';
+import { initDebug, isDebugEnabled } from './debug';
 
 // Global Error Boundary to prevent leaving terminal raw mode broken on crash
 function registerCrashBoundary() {
@@ -45,6 +46,12 @@ async function run() {
 
   // Check command line flags before creating any stdin-consuming adapters
   const args = process.argv.slice(2);
+  const debugEnabled = isDebugEnabled() || args.includes('--debug');
+  const logDir = path.join(globalConfigDir, 'logs');
+  initDebug({ enabled: debugEnabled, logDir });
+  if (debugEnabled) {
+    process.stderr.write('\x1b[90m[ak-coder debug] logging to ~/.ak-coder/logs/{agent.log,ui.trace.log}\x1b[0m\n');
+  }
 
   // Initialize Core Adapters
   const nfs = new NodeFileSystem();
@@ -102,7 +109,7 @@ async function run() {
   // Initialize services using ports
   const llm = new OpenAICompatibleLLMService(config.apiKey, config.baseUrl, config.model);
   const store = new FileSessionStore(nfs, path.join(globalConfigDir, 'history'));
-  const logger = new FileLogger(nfs, path.join(globalConfigDir, 'logs'));
+  const logger = new FileLogger(nfs, logDir, 10 * 1024 * 1024, 5, debugEnabled ? 'debug' : 'info');
 
   // Register dependencies to Ports registry
   DependencyRegistry.register('fileSystem', nfs);

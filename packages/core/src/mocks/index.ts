@@ -161,7 +161,7 @@ export class MockSessionStore implements SessionStore {
 }
 
 export class MockLogger implements Logger {
-  public logs: { level: 'info' | 'warn' | 'error'; message: string; meta?: any }[] = [];
+  public logs: { level: 'info' | 'warn' | 'error' | 'debug'; message: string; meta?: any }[] = [];
   public activeSpans = new Set<string>();
 
   info(message: string, meta?: any): void {
@@ -174,6 +174,10 @@ export class MockLogger implements Logger {
 
   error(message: string, error?: any): void {
     this.logs.push({ level: 'error', message, meta: error });
+  }
+
+  debug(message: string, meta?: any): void {
+    this.logs.push({ level: 'debug', message, meta });
   }
 
   startSpan(name: string): string {
