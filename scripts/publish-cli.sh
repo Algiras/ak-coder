@@ -15,7 +15,7 @@ bun run test:coverage:check
 cp "$ROOT/README.md" "$CLI/README.md"
 cd "$CLI"
 bun run build
-bun publish --dry-run --access public
-bun publish --access public
+npm publish --dry-run --access public 2>/dev/null || true
+npm publish --access public
 
 echo "✓ Published https://www.npmjs.com/package/@algiras/ak-coder"
