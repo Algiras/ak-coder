@@ -23,7 +23,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Typecheck
-        run: bunx tsc --noEmit
+        run: bunx tsc --noEmit -p apps/cli/tsconfig.json
 
       - name: Run Tests with Coverage Check
         run: bun run test:coverage:check
