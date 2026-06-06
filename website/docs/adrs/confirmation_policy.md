@@ -20,7 +20,7 @@ Preserve screen space in interactive prompts by using the following details form
 * **Rich UI Previews**: The Ink REPL uses `@claude-code-kit/ui` helper components (`FileEditPermissionContent` and `BashPermissionContent`) to render clean, readable previews for file edits and shell executions.
 * **Theming**: The REPL UI is wrapped in a `ThemeProvider` component utilizing dark theme configurations.
 
-Presets are activated via the `--plan` / `--yolo` CLI flags at startup, or toggled mid-session with `/plan`, `/plan off` REPL commands.
+Presets are activated via the `--plan` CLI flag at startup, or toggled mid-session with `/plan on` / `/plan off` REPL commands. The interactive Ink UI also cycles between `default` and `plan` via **Shift+Tab**. The `yolo` preset is used programmatically (eval harness, tests) — not exposed as a REPL slash command today.
 
 ## Consequences
 * **Defense in depth for plan mode**: Even if the system prompt directive is ignored, the tool-list filter prevents the LLM from attempting the call; the policy deny is the final backstop.

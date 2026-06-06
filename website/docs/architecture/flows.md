@@ -41,7 +41,7 @@ flowchart TD
     TC[Tool call received] --> RO{readOnlyHint?}
     RO -->|yes| PAR[Run in parallel\nwith other reads]
     RO -->|no| CP{Confirmation\nPolicy}
-    CP -->|yolo| EXEC[Execute immediately]
+    CP -->|auto-approve| EXEC[Execute immediately]
     CP -->|plan| DENY[Reject — no mutations in plan mode]
     CP -->|default| SG{Safety Gate\nbash only}
     SG -->|safe command| EXEC
@@ -79,6 +79,8 @@ graph LR
 ## Session & Compaction
 
 Sessions are stored to disk as JSON. When the context window nears its limit, AgentCore compacts older messages into a summary to preserve working memory.
+
+Read-only tools with `readOnlyHint: true` run in parallel when batched — see [Tool Annotations](/docs/tools/annotations).
 
 ```mermaid
 flowchart LR

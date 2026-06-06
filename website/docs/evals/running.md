@@ -24,7 +24,7 @@ bun run packages/evals/run.ts --providers=ollama --report
 # Run 3x to detect flaky evals
 bun run packages/evals/run.ts --runs=3
 
-# Regenerate golden snapshots
+# Regenerate golden snapshots (flag is read by check.golden in checks.ts)
 bun run packages/evals/run.ts --filter=golden --update-goldens
 ```
 
