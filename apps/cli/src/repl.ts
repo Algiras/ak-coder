@@ -17,6 +17,7 @@
 
 import { AgentCore, LLMService, SessionStore, ProcessRunner, TerminalIo } from '@ak-coder/core';
 import type { StreamChunk } from '@ak-coder/core';
+import { runSubAgent } from '@ak-coder/core';
 import { NodeTerminalIo } from './adapters/terminal';
 import { writePlanFile, listPlans, readPlan } from './plan-file';
 
@@ -488,8 +489,6 @@ export const COMMANDS: Record<string, ReplCommand> = {
         return;
       }
 
-      nio.write(`\x1b[35m[Spawning sub-agent: "${role}"]\x1b[0m`);
-
       try {
         const child = core.spawnChildAgent();
         child.agentsRules = `You are a specialized sub-agent with the role: "${role}".\nYour task is:\n${taskPrompt}\n\nProvide a detailed and direct technical summary of your findings when done.`;
@@ -497,10 +496,14 @@ export const COMMANDS: Record<string, ReplCommand> = {
         const subSessionId = `sub-${Date.now()}`;
         await child.startSession(subSessionId);
 
-        const writeChunk = createStreamChunkWriter();
-        const result = await child.processMessage(`Begin task: ${taskPrompt}`, [], writeChunk);
-        process.stdout.write('\n');
-        nio.write(`\x1b[35m[Sub-agent "${role}" finished]\x1b[0m`);
+        const result = await runSubAgent({
+          terminalIo: nio,
+          role,
+          depth: child.delegationDepth,
+          transcript: 'assistant',
+          run: (stream) => child.processMessage(`Begin task: ${taskPrompt}`, [], stream)
+        });
+
         nio.write(`\x1b[90mTokens: ${result.inputTokens} in / ${result.outputTokens} out\x1b[0m`);
       } catch (e) {
         nio.writeError(`Sub-agent failed: ${(e as Error).message}`);

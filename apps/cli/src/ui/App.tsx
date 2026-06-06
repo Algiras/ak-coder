@@ -20,7 +20,7 @@ import {
   type ChatMessage,
   type StreamChunk,
 } from '@ak-coder/core';
-import { InkTerminalIo, InteractionEvent } from './InkTerminalIo';
+import { InkTerminalIo, InteractionEvent, SubAgentEvent } from './InkTerminalIo';
 import { COMMANDS, CommandContext } from '../repl';
 import { AkCoderREPL } from './AkCoderREPL';
 
@@ -32,6 +32,14 @@ type SelectInteraction = {
   message: string;
   choices: { name: string; value: unknown }[];
   onSelect: (v: unknown) => void;
+};
+
+type SubAgentState = {
+  role: string;
+  depth: number;
+  content: string;
+  thinking: string;
+  activityLabel: string | null;
 };
 
 export interface AppProps {
@@ -94,6 +102,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestProps | undefined>();
   const [selectInteraction, setSelectInteraction] = useState<SelectInteraction | undefined>();
   const [activityLabel, setActivityLabel] = useState<string | null>(null);
+  const [subAgent, setSubAgent] = useState<SubAgentState | null>(null);
   const streamRef = useRef('');
   const thinkingRef = useRef('');
   const historyRef = useRef<string[]>([]);
@@ -139,11 +148,54 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     const onActivity = ({ label }: { label: string | null }) => {
       setActivityLabel(label);
     };
+    const onSubAgent = (ev: SubAgentEvent) => {
+      if (ev.type === 'start') {
+        setSubAgent({
+          role: ev.role,
+          depth: ev.depth,
+          content: '',
+          thinking: '',
+          activityLabel: null,
+        });
+        return;
+      }
+      if (ev.type === 'stream') {
+        setSubAgent((current) => {
+          if (!current) return current;
+          if (ev.chunk.type === 'thinking') {
+            return { ...current, thinking: current.thinking + ev.chunk.text };
+          }
+          return { ...current, content: current.content + ev.chunk.text };
+        });
+        return;
+      }
+      if (ev.type === 'activity') {
+        setSubAgent((current) => current
+          ? { ...current, activityLabel: ev.label || null }
+          : current);
+        return;
+      }
+      if (ev.type === 'end') {
+        setSubAgent(null);
+        const stats = ev.inputTokens != null
+          ? `\x1b[90m↑${ev.inputTokens}  ↓${ev.outputTokens}\x1b[0m`
+          : '';
+        if (ev.transcript === 'assistant' && ev.summary) {
+          addMsg('assistant', ev.summary);
+        } else if (ev.transcript === 'system') {
+          addMsg('system', ev.summary ?? `◆ Sub-agent "${ev.role}" finished`);
+        } else if (ev.transcript !== 'silent') {
+          addMsg('system', `◆ Sub-agent "${ev.role}" finished${stats ? `\n${stats}` : ''}`);
+        }
+      }
+    };
     nio.on('line', onLine);
     nio.on('activity', onActivity);
+    nio.on('subagent', onSubAgent);
     return () => {
       nio.off('line', onLine);
       nio.off('activity', onActivity);
+      nio.off('subagent', onSubAgent);
     };
   }, [nio, addMsg]);
 
@@ -443,6 +495,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       isLoading={isLoading}
       streamingContent={streaming}
       streamingThinking={streamingThinking}
+      subAgent={subAgent}
       statusSegments={statusSegments as StatusLineSegment[]}
       permissionRequest={permissionRequest}
       selectInteraction={selectInteraction}

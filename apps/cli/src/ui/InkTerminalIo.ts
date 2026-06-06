@@ -1,4 +1,4 @@
-import { TerminalIo, ConfirmationRequest, ConfirmationResult } from '@ak-coder/core';
+import { TerminalIo, ConfirmationRequest, ConfirmationResult, StreamChunk } from '@ak-coder/core';
 
 // Minimal EventEmitter shim so we don't require @types/node
 class TypedEmitter {
@@ -11,6 +11,12 @@ class TypedEmitter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   off(event: string, fn: (arg: any) => void) { this._map.set(event, (this._map.get(event) ?? []).filter(f => f !== fn)); }
 }
+
+export type SubAgentEvent =
+  | { type: 'start'; role: string; depth: number }
+  | { type: 'stream'; chunk: StreamChunk }
+  | { type: 'activity'; label: string }
+  | { type: 'end'; role: string; summary?: string; inputTokens?: number; outputTokens?: number; transcript?: 'assistant' | 'system' | 'silent' };
 
 export type InteractionEvent =
   | { type: 'ask'; question: string }
@@ -30,6 +36,7 @@ export class InkTerminalIo extends TypedEmitter implements TerminalIo {
   private pendingConfirm: ((r: ConfirmationResult) => void) | null = null;
   private pendingSelect: ((v: unknown) => void) | null = null;
   private _batch: string[] | null = null;
+  private _subAgentDepth = 0;
 
   // ── Output ──────────────────────────────────────────────────────────────────
 
@@ -47,11 +54,39 @@ export class InkTerminalIo extends TypedEmitter implements TerminalIo {
   }
 
   setActivity(label: string): void {
+    if (this._subAgentDepth > 0) {
+      this.emit('subagent', { type: 'activity', label } satisfies SubAgentEvent);
+      return;
+    }
     this.emit('activity', { label });
   }
 
   clearActivity(): void {
+    if (this._subAgentDepth > 0) {
+      this.emit('subagent', { type: 'activity', label: '' } satisfies SubAgentEvent);
+      return;
+    }
     this.emit('activity', { label: null });
+  }
+
+  beginSubAgent(info: { role: string; depth: number }): void {
+    this._subAgentDepth++;
+    this.emit('subagent', { type: 'start', ...info } satisfies SubAgentEvent);
+  }
+
+  subAgentStream(chunk: StreamChunk): void {
+    this.emit('subagent', { type: 'stream', chunk } satisfies SubAgentEvent);
+  }
+
+  endSubAgent(info: {
+    role: string;
+    summary?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    transcript?: 'assistant' | 'system' | 'silent';
+  }): void {
+    this._subAgentDepth = Math.max(0, this._subAgentDepth - 1);
+    this.emit('subagent', { type: 'end', ...info } satisfies SubAgentEvent);
   }
 
   write(text: string): void {

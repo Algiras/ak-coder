@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CoreToolDefinition, ToolContext } from './types';
+import { runSubAgent } from './subagent-io';
 
 const schema = z.object({
   role: z.string().describe('The specialized role of the sub-agent (e.g. "Security Auditor", "Test Runner")'),
@@ -35,15 +36,13 @@ export const delegateTaskTool = (ctx: ToolContext): CoreToolDefinition<typeof sc
 
     await child.startSession(subSessionId);
 
-    if (ctx.terminalIo) {
-      ctx.terminalIo.write(`\n\x1b[35m[Spawning Sub-Agent: "${role}" at depth ${ctx.delegationDepth + 1}...]\x1b[0m\n`);
-    }
-
-    const response = await child.processMessage(`Begin task: "${taskPrompt}"`);
-
-    if (ctx.terminalIo) {
-      ctx.terminalIo.write(`\n\x1b[35m[Sub-Agent "${role}" finished execution]\x1b[0m\n`);
-    }
+    const response = await runSubAgent({
+      terminalIo: ctx.terminalIo,
+      role,
+      depth: ctx.delegationDepth + 1,
+      transcript: 'silent',
+      run: (stream) => child.processMessage(`Begin task: "${taskPrompt}"`, [], stream)
+    });
 
     return `[Sub-Agent "${role}" finished execution]\nSummary of Findings:\n${response.text}`;
   }

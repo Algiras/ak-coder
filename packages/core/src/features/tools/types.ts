@@ -1,4 +1,4 @@
-import { FileSystem, TerminalIo, ProcessRunner, Logger, ToolAnnotations } from '../../ports';
+import { FileSystem, TerminalIo, ProcessRunner, Logger, ToolAnnotations, StreamCallback } from '../../ports';
 import { ConfirmationPolicy } from '../confirmation/confirmation';
 import { CommandSafetyGate } from '../safety/safety';
 import { AgentHooks } from '../hooks/hooks';
@@ -20,7 +20,12 @@ export interface ChildAgent {
   agentsRules: string | null;
   addFileToContext(path: string): Promise<void>;
   startSession(id: string): Promise<void>;
-  processMessage(text: string): Promise<{ text: string }>;
+  processMessage(
+    text: string,
+    images?: string[],
+    streamCallback?: StreamCallback,
+    signal?: AbortSignal
+  ): Promise<{ text: string; inputTokens: number; outputTokens: number; cost: number; compacted: boolean }>;
 }
 
 export interface ToolContext {

@@ -31,6 +31,7 @@ import { HistorySearch } from './components/HistorySearch';
 import { MessageRenderer } from './components/MessageRenderer';
 import { SelectInteraction } from './components/SelectInteraction';
 import { ThinkingPanel } from './components/ThinkingPanel';
+import { SubAgentPanel } from './components/SubAgentPanel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,13 @@ export interface AkCoderREPLProps {
   isLoading: boolean;
   streamingContent: string | null;
   streamingThinking?: string | null;
+  subAgent?: {
+    role: string;
+    depth: number;
+    content: string;
+    thinking: string;
+    activityLabel?: string | null;
+  } | null;
   statusSegments: StatusLineSegment[];
   permissionRequest?: PermissionRequestProps;
   selectInteraction?: {
@@ -66,6 +74,7 @@ export function AkCoderREPL({
   isLoading,
   streamingContent,
   streamingThinking,
+  subAgent,
   statusSegments,
   permissionRequest,
   selectInteraction,
@@ -199,11 +208,20 @@ export function AkCoderREPL({
             streamingContent={null}
             renderMessage={renderMessage}
           />
-          {streamingThinking && (
+          {subAgent && (
+            <SubAgentPanel
+              role={subAgent.role}
+              depth={subAgent.depth}
+              content={subAgent.content}
+              thinking={subAgent.thinking}
+              activityLabel={subAgent.activityLabel}
+            />
+          )}
+          {streamingThinking && !subAgent && (
             <ThinkingPanel text={streamingThinking} />
           )}
           {streamingContent && (
-            <Box flexDirection="column" marginTop={messages.length > 0 || streamingThinking ? 1 : 0}>
+            <Box flexDirection="column" marginTop={messages.length > 0 || streamingThinking || subAgent ? 1 : 0}>
               <Box>
                 <Text color="#DA7756">●</Text>
                 <Text color="#DA7756" bold> {assistantName}</Text>
@@ -213,7 +231,7 @@ export function AkCoderREPL({
               </Box>
             </Box>
           )}
-          {isLoading && !streamingContent && !streamingThinking && (
+          {isLoading && !streamingContent && !streamingThinking && !subAgent && (
             <Box marginTop={messages.length > 0 ? 1 : 0} flexDirection="column">
               {activityLabel && (
                 <Text color="cyan">  ⠋ {activityLabel}</Text>

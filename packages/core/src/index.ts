@@ -16,3 +16,4 @@ export * from './features/history/indexer';
 export * from './adapters/docker-process';
 export * from './features/skills/skills';
 export * from './features/rules/rules';
+export * from './features/tools/subagent-io';
