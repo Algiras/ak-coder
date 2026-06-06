@@ -38,6 +38,7 @@ export class MockTerminalIo implements TerminalIo {
   public confirmResults: ConfirmationResult[] = [];
   public outputs: string[] = [];
   public errors: string[] = [];
+  public activities: string[] = [];
   public selectedMenuIndex = 0;
 
   async ask(question: string): Promise<string> {
@@ -52,6 +53,14 @@ export class MockTerminalIo implements TerminalIo {
 
   write(text: string): void {
     this.outputs.push(text);
+  }
+
+  setActivity(label: string): void {
+    this.activities.push(label);
+  }
+
+  clearActivity(): void {
+    this.activities.push('');
   }
 
   writeError(text: string): void {

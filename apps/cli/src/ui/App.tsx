@@ -85,8 +85,10 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
   const [vimMode, setVimMode] = useState(false);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestProps | undefined>();
   const [selectInteraction, setSelectInteraction] = useState<SelectInteraction | undefined>();
+  const [activityLabel, setActivityLabel] = useState<string | null>(null);
   const streamRef = useRef('');
   const historyRef = useRef<string[]>([]);
+  const interruptedRef = useRef(false);
   // AbortController is a global in Bun/Node 18+ — type assertion for tsc
   const abortRef = useRef<{ abort(): void } | null>(null);
 
@@ -96,7 +98,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
 
   // ── Status bar ──────────────────────────────────────────────────────────────
 
-  const [spinnerVerbs, setSpinnerVerbs] = useState(['Thinking', 'Analyzing', 'Planning']);
+  const [spinnerVerbs, setSpinnerVerbs] = useState(['Thinking', 'Working', 'Processing']);
 
   const statusSegments = useStatusLine((): StatusLineSegment[] => {
     const { contextPct, mode } = core.getStatus();
@@ -125,8 +127,15 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     const onLine = ({ text, error, role }: { text: string; error: boolean; role?: Message['role'] }) => {
       addMsg(error ? 'system' : (role ?? 'system'), text);
     };
+    const onActivity = ({ label }: { label: string | null }) => {
+      setActivityLabel(label);
+    };
     nio.on('line', onLine);
-    return () => nio.off('line', onLine);
+    nio.on('activity', onActivity);
+    return () => {
+      nio.off('line', onLine);
+      nio.off('activity', onActivity);
+    };
   }, [nio, addMsg]);
 
   useEffect(() => {
@@ -186,7 +195,10 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
 
   useEffect(() => {
     core.onCompactingStart = () => setSpinnerVerbs(['Compacting', 'Summarizing', 'Archiving']);
-    core.onCompactingEnd  = () => setSpinnerVerbs(['Thinking', 'Analyzing', 'Planning']);
+    core.onCompactingEnd  = () => {
+      const { mode } = core.getStatus();
+      setSpinnerVerbs(mode === 'plan' ? ['Planning', 'Researching', 'Drafting'] : ['Thinking', 'Working', 'Processing']);
+    };
     return () => { core.onCompactingStart = undefined; core.onCompactingEnd = undefined; };
   }, [core]);
 
@@ -194,11 +206,13 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
 
   const runMessage = useCallback(async (text: string) => {
     const t0 = Date.now();
+    interruptedRef.current = false;
     // AbortController is a Bun/Node global; cast through unknown for strict tsc
     const controller = new (globalThis as unknown as { AbortController: new () => { signal: unknown; abort(): void } }).AbortController();
     abortRef.current = controller;
     streamRef.current = '';
     setStreaming('');
+    setActivityLabel(null);
     setIsLoading(true);
 
     try {
@@ -223,12 +237,15 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       setStreaming(null);
       const err = e as Error;
       if (err.name === 'AbortError') {
-        addMsg('system', '\x1b[33m⚠ Interrupted\x1b[0m');
+        if (!interruptedRef.current) {
+          addMsg('system', '\x1b[33m⚠ Interrupted\x1b[0m');
+        }
       } else {
         addMsg('system', `\x1b[31mError: ${err.message}\x1b[0m`);
       }
     } finally {
       abortRef.current = null;
+      setActivityLabel(null);
       setIsLoading(false);
     }
   }, [core, addMsg]);
@@ -368,14 +385,28 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     const idx = MODES.indexOf(mode as ConfirmationPreset);
     const next = MODES[(idx + 1) % MODES.length];
     core.setConfirmationMode(next);
+    setSpinnerVerbs(next === 'plan' ? ['Planning', 'Researching', 'Drafting'] : ['Thinking', 'Working', 'Processing']);
     addMsg('system', `Mode → ${next}`);
   }, [core, addMsg]);
 
   // ── Interrupt ───────────────────────────────────────────────────────────────
 
   const handleInterrupt = useCallback(() => {
-    abortRef.current?.abort();
-  }, []);
+    if (!abortRef.current) return;
+    interruptedRef.current = true;
+    abortRef.current.abort();
+    setStreaming(null);
+    setActivityLabel(null);
+    setIsLoading(false);
+    addMsg('system', '\x1b[33m⚠ Interrupted\x1b[0m');
+  }, [addMsg]);
+
+  useEffect(() => {
+    if (!isLoading) return;
+    const onSigInt = () => handleInterrupt();
+    process.on('SIGINT', onSigInt);
+    return () => process.off('SIGINT', onSigInt);
+  }, [isLoading, handleInterrupt]);
 
   // ── Exit ────────────────────────────────────────────────────────────────────
 
@@ -396,6 +427,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       selectInteraction={selectInteraction}
       vimMode={vimMode}
       history={historyRef.current}
+      activityLabel={activityLabel}
       spinner={
         <Spinner verbs={spinnerVerbs} color="cyan" showElapsed />
       }

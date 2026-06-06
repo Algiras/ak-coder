@@ -82,7 +82,8 @@ describe('AgentCore Tool Calling ReAct Loop', () => {
 
     let result = await agent.processMessage('list files');
     expect(result.text).toBe('Done listing files!');
-    expect(mockNio.outputs).toHaveLength(1); // just loader warning
+    expect(mockNio.outputs).toHaveLength(0);
+    expect(mockNio.activities.some(a => a.includes('bash(ls)'))).toBe(true);
     expect(mockNio.confirmResults).toHaveLength(0); // no safety confirm prompted
 
     // Scenario 2: Unsafe command rejected by user
@@ -107,27 +108,48 @@ describe('AgentCore Tool Calling ReAct Loop', () => {
     expect(lastToolResponse?.content).toContain('User rejected command execution');
   });
 
-  it('should enforce Write-Only-After-Read safety lock', async () => {
+  it('should enforce Write-Only-After-Read safety lock for existing files only', async () => {
     const agent = new AgentCore(mockFs, mockLlm, mockStore, mockLogger, mockNpr, mockNio, workspaceRoot);
     await agent.startSession('test-session-lock');
 
-    // Write to a file without reading it first
+    // New file: write without reading first should succeed
+    mockNio.confirmResults = [{ approved: true, applyToAll: false }];
     mockLlm.responses = [
       {
-        text: 'Let me write directly to a file',
+        text: 'Creating a new file',
+        tool_calls: [
+          {
+            id: 'call_write_new',
+            type: 'function',
+            function: { name: 'write_file', arguments: JSON.stringify({ path: 'new_file.txt', content: 'hello' }) }
+          }
+        ]
+      },
+      { text: 'Created new_file.txt' }
+    ];
+
+    const created = await agent.processMessage('write hello to new_file.txt');
+    expect(created.text).toBe('Created new_file.txt');
+    expect(await mockFs.readFile('/workspace/new_file.txt')).toBe('hello');
+
+    // Existing file on disk: write without reading first should fail
+    await mockFs.writeFile('/workspace/existing.txt', 'old content');
+    mockLlm.responses = [
+      {
+        text: 'Let me overwrite directly',
         tool_calls: [
           {
             id: 'call_write',
             type: 'function',
-            function: { name: 'write_file', arguments: JSON.stringify({ path: 'new_file.txt', content: 'hello' }) }
+            function: { name: 'write_file', arguments: JSON.stringify({ path: 'existing.txt', content: 'updated without read' }) }
           }
         ]
       },
       { text: 'Did it write?' }
     ];
 
-    await agent.processMessage('write hello to new_file.txt');
-    const toolMsg = agent.getMessages().find(m => m.role === 'tool');
+    await agent.processMessage('overwrite existing.txt without reading');
+    const toolMsg = agent.getMessages().find(m => m.role === 'tool' && m.tool_call_id === 'call_write');
     expect(toolMsg).toBeDefined();
     expect(toolMsg?.content).toContain('Write-Only-After-Read lock violated');
 

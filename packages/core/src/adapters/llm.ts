@@ -83,6 +83,10 @@ export class OpenAICompatibleLLMService implements LLMService {
       let buffer = '';
 
       while (true) {
+        if (options?.signal?.aborted) {
+          await reader.cancel().catch(() => {});
+          throw new DOMException('Interrupted', 'AbortError');
+        }
         const { done, value } = await reader.read();
         if (done) break;
 

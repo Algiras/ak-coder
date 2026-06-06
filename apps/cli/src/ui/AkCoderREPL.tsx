@@ -46,6 +46,7 @@ export interface AkCoderREPLProps {
   };
   vimMode: boolean;
   history: string[];
+  activityLabel?: string | null;
   spinner?: React.ReactNode;
   assistantName?: string;
   onSubmit: (text: string) => Promise<void>;
@@ -67,6 +68,7 @@ export function AkCoderREPL({
   selectInteraction,
   vimMode,
   history,
+  activityLabel,
   spinner,
   assistantName = 'AKCoder',
   onSubmit,
@@ -88,6 +90,15 @@ export function AkCoderREPL({
   }, [assistantName]);
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
+
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === 'c' && isLoading) {
+        onInterrupt();
+      }
+    },
+    { isActive: isLoading }
+  );
 
   useInput(
     (input, key) => {
@@ -197,7 +208,10 @@ export function AkCoderREPL({
             </Box>
           )}
           {isLoading && !streamingContent && (
-            <Box marginTop={messages.length > 0 ? 1 : 0}>
+            <Box marginTop={messages.length > 0 ? 1 : 0} flexDirection="column">
+              {activityLabel && (
+                <Text color="cyan">  ⠋ {activityLabel}</Text>
+              )}
               {spinner ?? <Text color="cyan">  thinking…</Text>}
             </Box>
           )}

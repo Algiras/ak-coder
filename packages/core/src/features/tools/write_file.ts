@@ -10,15 +10,16 @@ const schema = z.object({
 export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'write_file',
   annotations: { title: 'Write File', destructiveHint: true },
-  description: 'Write complete new content to a file. A unified diff will be shown and requires explicit user confirmation. You must read the file first in the current session before writing.',
+  description: 'Write complete new content to a file. A unified diff will be shown and requires explicit user confirmation. Creating a new file does not require read_file first; overwriting an existing file requires reading it in this session first.',
   schema,
   handler: async (args) => {
     const resolvedPath = ctx.resolveWorkspacePath(args.path);
     let { content } = args;
     ctx.resetConsecutiveReads();
 
-    if (!ctx.readFiles.has(resolvedPath)) {
-      throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${args.path}" before you can write to it.`);
+    const exists = await ctx.fs.exists(resolvedPath);
+    if (exists && !ctx.readFiles.has(resolvedPath)) {
+      throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${args.path}" before you can overwrite it.`);
     }
 
     if (ctx.hooks.beforeWriteFile) {
@@ -36,7 +37,7 @@ export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schem
       }
     }
 
-    const oldContent = (await ctx.fs.exists(resolvedPath)) ? await ctx.fs.readFile(resolvedPath) : '';
+    const oldContent = exists ? await ctx.fs.readFile(resolvedPath) : '';
     const diffs = DiffEngine.compare(oldContent, content);
     const coloredDiff = DiffEngine.renderColorDiff(diffs);
 
@@ -52,6 +53,7 @@ export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schem
     let writeSuccess = true;
     try {
       await ctx.fs.writeFile(resolvedPath, content);
+      ctx.readFiles.add(resolvedPath);
       ctx.markModified();
     } catch (e) {
       writeSuccess = false;

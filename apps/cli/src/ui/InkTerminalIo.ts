@@ -46,6 +46,14 @@ export class InkTerminalIo extends TypedEmitter implements TerminalIo {
     }
   }
 
+  setActivity(label: string): void {
+    this.emit('activity', { label });
+  }
+
+  clearActivity(): void {
+    this.emit('activity', { label: null });
+  }
+
   write(text: string): void {
     if (this._batch !== null) {
       this._batch.push(text);

@@ -18,6 +18,7 @@ import { InkTerminalIo } from './ui/InkTerminalIo';
 import React from 'react';
 import { render } from '@claude-code-kit/ink-renderer';
 import { App } from './ui/App';
+import cliPkg from '../package.json';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -267,7 +268,7 @@ async function run() {
   process.stdout.write([
     '',
     `\x1b[36m ╭──────────────────────────────────────╮\x1b[0m`,
-    `\x1b[36m │\x1b[0m  \x1b[1;36m ${nameDisplay}\x1b[0m  \x1b[90mv0.1.0\x1b[0m                    \x1b[36m│\x1b[0m`,
+    `\x1b[36m │\x1b[0m  \x1b[1;36m ${nameDisplay}\x1b[0m  \x1b[90mv${cliPkg.version}\x1b[0m                    \x1b[36m│\x1b[0m`,
     `\x1b[36m │\x1b[0m  model  \x1b[33m${modelName.padEnd(30)}\x1b[0m\x1b[36m│\x1b[0m`,
     `\x1b[36m │\x1b[0m  cwd    \x1b[32m${dirName.slice(0, 30).padEnd(30)}\x1b[0m\x1b[36m│\x1b[0m`,
     `\x1b[36m ╰──────────────────────────────────────╯\x1b[0m`,

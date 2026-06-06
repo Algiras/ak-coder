@@ -71,6 +71,7 @@ export const patchFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schem
     let writeSuccess = true;
     try {
       await ctx.fs.writeFile(resolvedPath, content);
+      ctx.readFiles.add(resolvedPath);
       ctx.markModified();
     } catch (e) {
       writeSuccess = false;

@@ -15,7 +15,7 @@ Reads a file and returns its content.
 **Parameters:**
 - `path` (string, required) — workspace-relative path
 
-The agent **must** call `read_file` before `write_file`, `str_replace`, or `patch_file`. This read-before-write lock prevents blind edits. Attempting to write without reading first returns an error.
+The agent **must** call `read_file` before overwriting an existing file with `write_file`, `str_replace`, or `patch_file`. Creating a **new** file with `write_file` does not require a prior read. After a successful write, the file is marked as read for the rest of the session.
 
 ---
 
@@ -29,7 +29,7 @@ Writes complete new content to a file. Creates parent directories if needed.
 - `path` (string, required) — workspace-relative path
 - `content` (string, required) — full file content to write
 
-Shows a colored unified diff before writing. Requires user confirmation in default mode (use the permission prompt, or "approve all" for the session). The file must have been read first in the current session.
+Shows a colored unified diff before writing. Requires user confirmation in default mode (use the permission prompt, or "approve all" for the session). Overwriting an existing file requires `read_file` first; new files can be created directly.
 
 Plugins can intercept writes via `beforeWriteFile` / `afterWriteFile` hooks to transform content or cancel the write.
 
