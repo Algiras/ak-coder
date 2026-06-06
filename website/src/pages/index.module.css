@@ -1,8 +1,10 @@
+/* Hero is always dark-branded — isolated from Infima light/dark theme bleed */
 .hero {
   padding: 5rem 2rem 4rem;
   text-align: center;
-  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
-  color: #fff;
+  background: linear-gradient(160deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%);
+  color: #f8fafc;
+  color-scheme: dark;
 }
 
 .heroInner {
@@ -14,19 +16,20 @@
   font-size: 3.5rem;
   font-weight: 800;
   margin-bottom: 1rem;
-  color: #fff;
+  color: #f8fafc;
 }
 
 .heroSubtitle {
   font-size: 1.25rem;
-  color: rgba(255, 255, 255, 0.88);
+  color: #cbd5e1;
   margin-bottom: 1.5rem;
   line-height: 1.6;
 }
 
 .install {
   display: inline-block;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 8px;
   padding: 0.55rem 1.2rem;
   margin-bottom: 2rem;
@@ -36,6 +39,15 @@
   letter-spacing: 0.01em;
 }
 
+/* Reset Infima inline-code styling inside the hero */
+.install code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
 .heroCtas {
   display: flex;
   gap: 1rem;
@@ -43,26 +55,28 @@
   flex-wrap: wrap;
 }
 
-.heroCtas a.button--primary {
-  background: #fff;
-  color: #1d4ed8;
-  border-color: #fff;
+.heroCtas :global(.button.button--primary) {
+  background: #f8fafc;
+  color: #1e40af;
+  border-color: #f8fafc;
 }
 
-.heroCtas a.button--primary:hover {
-  background: #e0e7ff;
-  border-color: #e0e7ff;
+.heroCtas :global(.button.button--primary:hover) {
+  background: #e2e8f0;
+  color: #1e3a8a;
+  border-color: #e2e8f0;
 }
 
-.heroCtas a.button--secondary {
+.heroCtas :global(.button.button--secondary) {
   background: transparent;
-  color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.6);
+  color: #f8fafc;
+  border: 2px solid rgba(248, 250, 252, 0.55);
 }
 
-.heroCtas a.button--secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: #fff;
+.heroCtas :global(.button.button--secondary:hover) {
+  background: rgba(248, 250, 252, 0.1);
+  color: #f8fafc;
+  border-color: #f8fafc;
 }
 
 .features {
@@ -79,17 +93,19 @@
   padding: 1.5rem;
   border-radius: 8px;
   border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-surface-color);
 }
 
 .feature h3 {
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: var(--ifm-color-primary-dark);
+  color: var(--ifm-color-primary);
 }
 
 .feature p {
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.6;
+  color: var(--ifm-font-color-base);
 }
