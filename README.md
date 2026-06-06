@@ -12,24 +12,54 @@ ak-coder is an open-source coding agent you can run locally, fork, and extend. I
 
 ---
 
+## Install
+
+ak-coder requires [Bun](https://bun.sh) ≥ 1.0.
+
+**One-shot (no install):**
+
+```bash
+bunx @algiras/ak-coder
+```
+
+**Global install:**
+
+```bash
+npm install -g @algiras/ak-coder
+ak-coder
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/Algiras/ak-coder
+cd ak-coder && bun install
+bun run apps/cli/src/index.ts
+```
+
+---
+
 ## Quick Start
 
-**With Ollama (free, local):**
+**With Ollama (free, fully local):**
 
 ```bash
 # 1. Install Ollama and pull a model
 brew install ollama
 ollama pull gemma3:4b
 
-# 2. Run ak-coder
+# 2. Start the agent in your project directory
+cd ~/your-project
 bunx @algiras/ak-coder
 ```
 
 **With OpenRouter (cloud, free tier available):**
 
 ```bash
-OPEN_ROUTER_KEY=your_key bunx @algiras/ak-coder
+OPEN_ROUTER_KEY=sk-or-... bunx @algiras/ak-coder
 ```
+
+Free model used by default: `google/gemma-3-27b-it:free`. Switch models in `~/.ak-coder/config.json`.
 
 ---
 
