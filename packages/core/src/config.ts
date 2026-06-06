@@ -81,6 +81,16 @@ export class ConfigManager {
       }
     }
 
+    if (!providers.groq) {
+      providers.groq = {
+        apiKey: process.env.GROQ_KEY || process.env.GROQ_API_KEY || 'mock-key',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        model: 'llama-3.1-70b-versatile',
+        costInput: 0.59,
+        costOutput: 0.79,
+      };
+    }
+
     let apiKey = typeof data.apiKey === 'string' ? data.apiKey : (process.env.OPENAI_API_KEY || 'mock-key');
     let baseUrl = typeof data.baseUrl === 'string' ? data.baseUrl : (process.env.OPENAI_API_BASE || 'https://api.openai.com/v1');
     let model = typeof data.model === 'string' ? data.model : 'gpt-4o';

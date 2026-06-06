@@ -72,6 +72,7 @@ describe('/providers CLI Command', () => {
     expect(output).toContain('Configured Providers');
     expect(output).toContain('openai');
     expect(output).toContain('ollama');
+    expect(output).toContain('groq');
   });
 
   it('should allow selecting a provider and update the live config dynamically', async () => {
