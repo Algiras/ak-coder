@@ -115,7 +115,7 @@ export class ConfigManager {
       providers.openrouter = {
         apiKey: process.env.OPEN_ROUTER_KEY || process.env.OPENROUTER_API_KEY || 'mock-key',
         baseUrl: 'https://openrouter.ai/api/v1',
-        model: 'meta-llama/llama-3-8b-instruct:free',
+        model: 'openrouter/free',
         costInput: 0.0,
         costOutput: 0.0,
       };
