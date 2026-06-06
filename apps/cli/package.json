@@ -1,23 +1,28 @@
 {
   "name": "@algiras/ak-coder",
   "version": "0.1.0",
-  "description": "A hackable, hexagonal-architecture LLM agent harness for the terminal",
-  "keywords": ["ai", "agent", "llm", "cli", "terminal", "ollama", "openai"],
+  "description": "A hackable, hexagonal-architecture LLM agent harness for the terminal — connects to Ollama, OpenRouter, Gemini, Groq, DeepSeek, or any OpenAI-compatible endpoint",
+  "keywords": ["ai", "agent", "llm", "cli", "terminal", "ollama", "openai", "openrouter", "coding-agent"],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Algiras/ak-coder.git"
   },
   "homepage": "https://algiras.github.io/ak-coder",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "bin": {
-    "ak-coder": "src/index.ts"
+    "ak-coder": "dist/index.js"
   },
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md"
+  ],
   "scripts": {
-    "dev": "bun run src/index.ts"
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --target bun --outfile dist/index.js --external react-devtools-core && chmod +x dist/index.js"
   },
   "dependencies": {
-    "@ak-coder/core": "workspace:*",
     "@claude-code-kit/ink-renderer": "^0.3.1",
     "@claude-code-kit/ui": "^0.3.1",
     "@types/react": "^19.2.15",

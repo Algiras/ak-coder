@@ -23,6 +23,10 @@ jobs:
       - name: Run tests
         run: bun run test:coverage:check
 
+      - name: Build bundle
+        run: bun run build
+        working-directory: apps/cli
+
       - name: Publish to npm
         run: bun publish --access public
         working-directory: apps/cli
