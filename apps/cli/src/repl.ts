@@ -569,6 +569,128 @@ export const COMMANDS: Record<string, ReplCommand> = {
     }
   },
 
+  '/providers': {
+    description: 'Manage LLM providers: /providers [select <name> | set <name> <key> <value>]',
+    handler: async (args, { core, nio, llm }) => {
+      const os = await import('os');
+      const path = await import('path');
+      const { NodeFileSystem } = await import('./adapters/filesystem');
+      const { ConfigManager } = await import('@ak-coder/core');
+
+      const configPath = path.join(os.homedir(), '.ak-coder', 'config.json');
+      const configManager = new ConfigManager(new NodeFileSystem(), configPath);
+      const config = await configManager.load();
+
+      const providers = config.providers || {};
+      const activeProvider = config.activeProvider;
+
+      const parts = args.trim().split(/\s+/);
+      const subCommand = parts[0]?.toLowerCase();
+
+      if (!subCommand) {
+        // List providers and their configs
+        nio.write('\x1b[36m── Configured Providers ──────────────────\x1b[0m');
+        if (Object.keys(providers).length === 0) {
+          nio.write('  \x1b[90m(none)\x1b[0m');
+        } else {
+          for (const [name, prov] of Object.entries(providers)) {
+            const isActive = name === activeProvider;
+            const activeStr = isActive ? ' \x1b[32m(active)\x1b[0m' : '';
+            const maskedKey = prov.apiKey
+              ? (prov.apiKey === 'ollama' ? 'ollama' : `${prov.apiKey.slice(0, 3)}...${prov.apiKey.slice(-4)}`)
+              : '(none)';
+            nio.write(`  ${isActive ? '●' : ' '} \x1b[1m${name}\x1b[0m${activeStr}`);
+            nio.write(`    model:    ${prov.model ?? '(none)'}`);
+            nio.write(`    baseUrl:  ${prov.baseUrl ?? '(none)'}`);
+            nio.write(`    apiKey:   ${maskedKey}`);
+            if (prov.costInput !== undefined || prov.costOutput !== undefined) {
+              nio.write(`    cost:     input $${prov.costInput ?? 0}/1M, output $${prov.costOutput ?? 0}/1M`);
+            }
+          }
+        }
+        nio.write('\n\x1b[90mUsage:\x1b[0m');
+        nio.write('  /providers select <name>         - Switch active provider');
+        nio.write('  /providers set <name> <k> <v>    - Update provider setting');
+        return;
+      }
+
+      if (subCommand === 'select') {
+        const name = parts[1];
+        if (!name) {
+          nio.writeError('Usage: /providers select <name>');
+          return;
+        }
+        if (!providers[name]) {
+          nio.writeError(`Unknown provider "${name}". Configured: ${Object.keys(providers).join(', ')}`);
+          return;
+        }
+
+        config.activeProvider = name;
+        await configManager.save(config);
+
+        // Apply dynamically to core's llm service and pricing configuration
+        const activeCfg = providers[name];
+        if (activeCfg) {
+          const svc = llm as any;
+          if (activeCfg.model) svc.defaultModel = activeCfg.model;
+          if (activeCfg.baseUrl) svc.baseUrl = activeCfg.baseUrl;
+          if (activeCfg.apiKey) svc.apiKey = activeCfg.apiKey;
+          
+          if (activeCfg.costInput !== undefined && activeCfg.costOutput !== undefined) {
+            core.setPricing(activeCfg.costInput, activeCfg.costOutput);
+          }
+        }
+
+        nio.write(`\x1b[36m✓ Switched active provider to: ${name}\x1b[0m`);
+        return;
+      }
+
+      if (subCommand === 'set') {
+        const name = parts[1];
+        const key = parts[2];
+        const value = parts.slice(3).join(' ');
+
+        if (!name || !key || !value) {
+          nio.writeError('Usage: /providers set <name> <key> <value>');
+          return;
+        }
+
+        const EDITABLE = ['apiKey', 'baseUrl', 'model', 'costInput', 'costOutput'];
+        if (!EDITABLE.includes(key)) {
+          nio.writeError(`Invalid setting "${key}". Available: ${EDITABLE.join(', ')}`);
+          return;
+        }
+
+        if (!providers[name]) {
+          providers[name] = {};
+        }
+
+        const coerced: any = (key === 'costInput' || key === 'costOutput') ? parseFloat(value) : value;
+        providers[name][key] = coerced;
+        config.providers = providers;
+
+        await configManager.save(config);
+        nio.write(`\x1b[36m✓ Updated [${name}].${key} = ${coerced}\x1b[0m`);
+
+        // If the updated provider is active, apply immediately
+        if (name === activeProvider) {
+          const svc = llm as any;
+          if (key === 'model') svc.defaultModel = coerced;
+          if (key === 'baseUrl') svc.baseUrl = coerced;
+          if (key === 'apiKey') svc.apiKey = coerced;
+          if (key === 'costInput' || key === 'costOutput') {
+            const currentCostInput = key === 'costInput' ? coerced : (providers[name].costInput ?? 5.0);
+            const currentCostOutput = key === 'costOutput' ? coerced : (providers[name].costOutput ?? 15.0);
+            core.setPricing(currentCostInput, currentCostOutput);
+          }
+        }
+        return;
+      }
+
+      nio.writeError(`Unknown command "${subCommand}". Use select or set.`);
+    }
+  }
+
 };
 
 // Exported so NodeTerminalIo can provide tab completion from the same source.
@@ -577,6 +699,7 @@ export const REPL_COMMAND_NAMES: string[] = [
   '/plan on', '/plan off', '/plan list', '/plan show',
   '/agent',
   '/settings',
+  '/providers',
 ];
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
