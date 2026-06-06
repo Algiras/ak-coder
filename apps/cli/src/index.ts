@@ -1,4 +1,9 @@
 #!/usr/bin/env bun
+import React from 'react';
+import { render } from '@claude-code-kit/ink-renderer';
+import * as path from 'path';
+import * as os from 'os';
+import cliPkg from '../package.json';
 import {
   DependencyRegistry,
   AgentCore,
@@ -15,12 +20,7 @@ import { StdioJsonRpcAdapter } from './adapters/stdio';
 import { REPL_COMMAND_NAMES } from './repl';
 import { writePlanFile } from './plan-file';
 import { InkTerminalIo } from './ui/InkTerminalIo';
-import React from 'react';
-import { render } from '@claude-code-kit/ink-renderer';
 import { App } from './ui/App';
-import cliPkg from '../package.json';
-import * as path from 'path';
-import * as os from 'os';
 
 // Global Error Boundary to prevent leaving terminal raw mode broken on crash
 function registerCrashBoundary() {

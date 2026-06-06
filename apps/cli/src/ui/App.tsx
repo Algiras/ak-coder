@@ -11,11 +11,18 @@ import {
   FileEditPermissionContent,
   BashPermissionContent,
 } from '@claude-code-kit/ui';
-import { AgentCore, ConfirmationRequest } from '@ak-coder/core';
+import {
+  AgentCore,
+  ConfirmationRequest,
+  type SessionStore,
+  type LLMService,
+  type ProcessRunner,
+  type ChatMessage,
+  type StreamChunk,
+} from '@ak-coder/core';
 import { InkTerminalIo, InteractionEvent } from './InkTerminalIo';
 import { COMMANDS, CommandContext } from '../repl';
 import { AkCoderREPL } from './AkCoderREPL';
-import type { SessionStore, LLMService, ProcessRunner, ChatMessage } from '@ak-coder/core';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,12 +88,14 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [streaming, setStreaming] = useState<string | null>(null);
+  const [streamingThinking, setStreamingThinking] = useState<string | null>(null);
   const [lastTurn, setLastTurn] = useState<TurnStats | undefined>();
   const [vimMode, setVimMode] = useState(false);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestProps | undefined>();
   const [selectInteraction, setSelectInteraction] = useState<SelectInteraction | undefined>();
   const [activityLabel, setActivityLabel] = useState<string | null>(null);
   const streamRef = useRef('');
+  const thinkingRef = useRef('');
   const historyRef = useRef<string[]>([]);
   const interruptedRef = useRef(false);
   // AbortController is a global in Bun/Node 18+ — type assertion for tsc
@@ -211,17 +220,25 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     const controller = new (globalThis as unknown as { AbortController: new () => { signal: unknown; abort(): void } }).AbortController();
     abortRef.current = controller;
     streamRef.current = '';
+    thinkingRef.current = '';
     setStreaming('');
+    setStreamingThinking(null);
     setActivityLabel(null);
     setIsLoading(true);
 
     try {
-      const response = await core.processMessage(text, [], (chunk) => {
-        streamRef.current += chunk;
-        setStreaming(streamRef.current);
+      const response = await core.processMessage(text, [], (chunk: StreamChunk) => {
+        if (chunk.type === 'thinking') {
+          thinkingRef.current += chunk.text;
+          setStreamingThinking(thinkingRef.current);
+        } else {
+          streamRef.current += chunk.text;
+          setStreaming(streamRef.current);
+        }
       }, controller.signal as AbortSignal);
 
       setStreaming(null);
+      setStreamingThinking(null);
       if (streamRef.current) addMsg('assistant', streamRef.current);
       streamRef.current = '';
 
@@ -235,6 +252,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       addMsg('system', `\x1b[90m↑${response.inputTokens}  ↓${response.outputTokens}  $${response.cost.toFixed(5)}  ${(stats.ms / 1000).toFixed(0)}s\x1b[0m`);
     } catch (e: unknown) {
       setStreaming(null);
+      setStreamingThinking(null);
       const err = e as Error;
       if (err.name === 'AbortError') {
         if (!interruptedRef.current) {
@@ -246,6 +264,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     } finally {
       abortRef.current = null;
       setActivityLabel(null);
+      setStreamingThinking(null);
       setIsLoading(false);
     }
   }, [core, addMsg]);
@@ -396,6 +415,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
     interruptedRef.current = true;
     abortRef.current.abort();
     setStreaming(null);
+    setStreamingThinking(null);
     setActivityLabel(null);
     setIsLoading(false);
     addMsg('system', '\x1b[33m⚠ Interrupted\x1b[0m');
@@ -422,6 +442,7 @@ export function App({ core, nio, workspaceRoot, store, llm, npr, model, assistan
       messages={messages}
       isLoading={isLoading}
       streamingContent={streaming}
+      streamingThinking={streamingThinking}
       statusSegments={statusSegments as StatusLineSegment[]}
       permissionRequest={permissionRequest}
       selectInteraction={selectInteraction}

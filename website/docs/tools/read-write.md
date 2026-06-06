@@ -29,7 +29,7 @@ Writes complete new content to a file. Creates parent directories if needed.
 - `path` (string, required) — workspace-relative path
 - `content` (string, required) — full file content to write
 
-Shows a colored unified diff before writing. Requires user confirmation in default mode (use the permission prompt, or "approve all" for the session). Overwriting an existing file requires `read_file` first; new files can be created directly.
+Shows a colored unified diff before overwriting. **New files** are written immediately with no prompt. Overwriting an existing file requires `read_file` first and shows a diff for approval.
 
 Plugins can intercept writes via `beforeWriteFile` / `afterWriteFile` hooks to transform content or cancel the write.
 

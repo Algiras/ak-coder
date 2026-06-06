@@ -32,7 +32,8 @@ export class CommandSafetyGate {
     // Commands that are pure reads or Git metadata checks
     const safeRegexes = [
       /^(git\s+)?(status|diff|log|show|branch|tag)(\s+.*)?$/,
-      /^(ls|pwd|echo|cat|grep|find)(\s+.*)?$/
+      /^(ls|pwd|echo|cat|grep|find)(\s+.*)?$/,
+      /^touch(\s+[^\s|;&><]+(\s+[^\s|;&><]+)*)?$/
     ];
 
     for (const rx of safeRegexes) {

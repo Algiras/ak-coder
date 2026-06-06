@@ -1,4 +1,4 @@
-import { FileSystem, TerminalIo, ProcessRunner, LLMService, SessionStore, Logger, ChatMessage, ConfirmationRequest, ConfirmationResult } from '../ports';
+import { FileSystem, TerminalIo, ProcessRunner, LLMService, SessionStore, Logger, ChatMessage, ConfirmationRequest, ConfirmationResult, StreamCallback } from '../ports';
 
 export class MockFileSystem implements FileSystem {
   public files = new Map<string, string>();
@@ -100,11 +100,11 @@ export class MockLlmService implements LLMService {
 
   async chat(
     messages: ChatMessage[],
-    options?: { stream?: (chunk: string) => void; signal?: AbortSignal }
+    options?: { stream?: StreamCallback; signal?: AbortSignal }
   ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
     this.lastPrompt = messages;
     if (options?.stream) {
-      options.stream(this.mockResponse);
+      options.stream({ type: 'content', text: this.mockResponse });
     }
     return {
       text: this.mockResponse,

@@ -6,7 +6,8 @@ import {
   SessionStore,
   Logger,
   ChatMessage,
-  ToolDefinition
+  ToolDefinition,
+  StreamCallback,
 } from './ports';
 import { McpClient } from './features/mcp/mcp';
 import { CommandSafetyGate } from './features/safety/safety';
@@ -388,7 +389,7 @@ export class AgentCore {
   async processMessage(
     userText: string,
     images: string[] = [],
-    streamCallback?: (chunk: string) => void,
+    streamCallback?: StreamCallback,
     signal?: AbortSignal
   ): Promise<{ text: string; inputTokens: number; outputTokens: number; cost: number; compacted: boolean }> {
     const spanId = this.logger.startSpan('processMessage');

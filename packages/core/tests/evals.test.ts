@@ -24,7 +24,7 @@ class QueueMockLlm implements LLMService {
     this.lastPrompt = messages;
     this.lastTools = options?.tools;
     const resp = this.responses.shift() || { text: 'Plan: ...placeholder plan...' };
-    if (options?.stream && resp.text) options.stream(resp.text);
+    if (options?.stream && resp.text) options.stream({ type: 'content', text: resp.text });
     return { text: resp.text, inputTokens: 10, outputTokens: 15, tool_calls: resp.tool_calls };
   }
 }

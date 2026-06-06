@@ -21,7 +21,7 @@ class QueueMockLlmService {
     this.lastPrompt = messages;
     const resp = this.responses.shift() || { text: 'Default fallback response' };
     if (options?.stream && resp.text) {
-      options.stream(resp.text);
+      options.stream({ type: 'content', text: resp.text });
     }
     return {
       text: resp.text,

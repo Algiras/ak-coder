@@ -770,7 +770,11 @@ export async function runRepl(core: AgentCore, nio: NodeTerminalIo, opts: ReplOp
           process.stdout.write('\r\x1b[2K');
           firstChunk = false;
         }
-        process.stdout.write(chunk);
+        if (chunk.type === 'thinking') {
+          process.stdout.write(`\x1b[90m${chunk.text}\x1b[0m`);
+        } else {
+          process.stdout.write(chunk.text);
+        }
       });
       process.stdout.write('\n');
       lastTurn = { ms: Date.now() - t0, outputTokens: response.outputTokens };

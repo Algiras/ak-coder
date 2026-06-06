@@ -10,7 +10,7 @@ const schema = z.object({
 export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'write_file',
   annotations: { title: 'Write File', destructiveHint: true },
-  description: 'Write complete new content to a file. A unified diff will be shown and requires explicit user confirmation. Creating a new file does not require read_file first; overwriting an existing file requires reading it in this session first.',
+  description: 'Write complete new content to a file. New files are created immediately without a confirmation prompt. Overwriting an existing file requires read_file first and shows a diff for approval.',
   schema,
   handler: async (args) => {
     const resolvedPath = ctx.resolveWorkspacePath(args.path);
@@ -37,17 +37,24 @@ export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schem
       }
     }
 
-    const oldContent = exists ? await ctx.fs.readFile(resolvedPath) : '';
-    const diffs = DiffEngine.compare(oldContent, content);
-    const coloredDiff = DiffEngine.renderColorDiff(diffs);
+    const writeMode = ctx.confirmationPolicy.getConfig().writes;
+    const mustConfirm = exists || writeMode === 'deny';
 
-    const confirmResult = await ctx.confirmationPolicy.check(
-      'write_file',
-      { action: 'write_file', description: `Write changes to ${args.path}`, detail: coloredDiff, path: args.path },
-      ctx.terminalIo
-    );
-    if (!confirmResult.approved) {
-      throw new Error(`User rejected changes to "${args.path}".`);
+    if (mustConfirm) {
+      const detail = exists
+        ? DiffEngine.renderColorDiff(DiffEngine.compare(await ctx.fs.readFile(resolvedPath), content))
+        : `Create new file ${args.path}`;
+
+      const confirmResult = await ctx.confirmationPolicy.check(
+        'write_file',
+        { action: 'write_file', description: exists ? `Write changes to ${args.path}` : `Create ${args.path}`, detail, path: args.path },
+        ctx.terminalIo
+      );
+      if (!confirmResult.approved) {
+        throw new Error(exists
+          ? `User rejected changes to "${args.path}".`
+          : `Write to "${args.path}" blocked by confirmation policy.`);
+      }
     }
 
     let writeSuccess = true;

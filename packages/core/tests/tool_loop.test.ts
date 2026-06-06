@@ -20,7 +20,7 @@ class QueueMockLlmService implements LLMService {
     this.lastPrompt = messages;
     const resp = this.responses.shift() || { text: 'Default fallback response' };
     if (options?.stream && resp.text) {
-      options.stream(resp.text);
+      options.stream({ type: 'content', text: resp.text });
     }
     return {
       text: resp.text,
@@ -112,8 +112,7 @@ describe('AgentCore Tool Calling ReAct Loop', () => {
     const agent = new AgentCore(mockFs, mockLlm, mockStore, mockLogger, mockNpr, mockNio, workspaceRoot);
     await agent.startSession('test-session-lock');
 
-    // New file: write without reading first should succeed
-    mockNio.confirmResults = [{ approved: true, applyToAll: false }];
+    // New file: write without reading or confirming first
     mockLlm.responses = [
       {
         text: 'Creating a new file',
@@ -131,6 +130,7 @@ describe('AgentCore Tool Calling ReAct Loop', () => {
     const created = await agent.processMessage('write hello to new_file.txt');
     expect(created.text).toBe('Created new_file.txt');
     expect(await mockFs.readFile('/workspace/new_file.txt')).toBe('hello');
+    expect(mockNio.confirmResults).toHaveLength(0);
 
     // Existing file on disk: write without reading first should fail
     await mockFs.writeFile('/workspace/existing.txt', 'old content');
