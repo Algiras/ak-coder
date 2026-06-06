@@ -36,10 +36,6 @@ jobs:
           cp README.md apps/cli/README.md
           cd apps/cli && bun run build
 
-      - name: Verify tarball
-        run: bun publish --dry-run --access public
-        working-directory: apps/cli
-
       - name: Publish to npm
         run: bun publish --access public
         working-directory: apps/cli
