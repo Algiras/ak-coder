@@ -34,7 +34,7 @@ jobs:
       - name: Prepare publish bundle
         run: |
           cp README.md apps/cli/README.md
-          bun run build --filter @algiras/ak-coder
+          cd apps/cli && bun run build
 
       - name: Verify tarball
         run: bun publish --dry-run --access public
