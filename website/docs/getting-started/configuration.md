@@ -87,6 +87,7 @@ Config file path: `~/.ak-coder/config.json`
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `OPENAI_API_KEY` | OpenAI API key (legacy root config) |
 | `OPENAI_API_BASE` | OpenAI-compatible base URL override |
+| `AK_CODER_DEBUG` | Enable debug trace logging (`1` or `true`) |
 
 ## CLI flags
 
@@ -97,6 +98,24 @@ Config file path: `~/.ak-coder/config.json`
 | `--sandbox-image <image>` | Docker image (default: `node:20-alpine`) |
 | `--sandbox-readonly` | Mount workspace read-only in sandbox |
 | `--stdio` | JSON-RPC mode on stdin/stdout (no REPL) |
+| `--debug` | Trace UI and agent activity to `~/.ak-coder/logs/` |
 | `init` | Create `AGENTS.md` and `.akcoderignore` in cwd |
+
+## Debug logging
+
+```bash
+ak-coder --debug
+# or
+AK_CODER_DEBUG=1 ak-coder
+```
+
+| File | Contents |
+|------|----------|
+| `~/.ak-coder/logs/ui.trace.log` | Ink UI events (activity labels, sub-agents, stream phases) |
+| `~/.ak-coder/logs/agent.log` | Core agent log (includes tool start/finish at debug level) |
+
+Useful when diagnosing stuck prompts, missing tool activity, or sub-agent rendering.
+
+See [Architecture: Streaming & Debug](/docs/architecture/flows#streaming--debug).
 
 See [Providers](/docs/providers) for per-provider setup guides.

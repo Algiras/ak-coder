@@ -36,6 +36,7 @@ evalCase('feature: what the agent should do', {
 | `check.fileModified(path)` | File was written during the run |
 | `check.responseContains(substring)` | Final response contains text |
 | `check.responseMatches(regex)` | Final response matches pattern |
+| `check.skillInvoked(name)` | User message contains `Apply Skill "<name>"` |
 | `check.golden(name, opts)` | File state matches a saved snapshot |
 
 ## Multi-turn evals
@@ -53,6 +54,29 @@ evalCase('session: context retained', {
   ],
 });
 ```
+
+## Custom run flows
+
+For multi-step scenarios (create a file, reload skills, invoke), use `run` instead of `prompts`:
+
+```typescript
+evalCase('skills: create SKILL.md, reload, and invoke', {
+  setup: (env) => env.confirmAll(),
+  run: async ({ prompt, invokeSkill, agent }) => {
+    await prompt('Use write_file to create .ak-coder/skills/howdy/SKILL.md with …');
+    await agent.reloadSkills();
+    await invokeSkill('howdy-skill', 'say hello in one word');
+  },
+  criteria: [
+    check.toolCalled('write_file'),
+    check.fileContains('/ws/.ak-coder/skills/howdy/SKILL.md', 'howdy-skill'),
+    check.skillInvoked('howdy-skill'),
+    judge('Final response starts with or prominently contains "HOWDY".'),
+  ],
+});
+```
+
+`invokeSkill(name, args)` sends the same `Apply Skill "<name>"…` message the REPL uses for `/skills:<name>`.
 
 ## Golden snapshots
 

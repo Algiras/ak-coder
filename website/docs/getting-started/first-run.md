@@ -14,7 +14,7 @@ You'll see the Ink UI banner with model, workspace, and keyboard hints:
 
 ```
  ╭──────────────────────────────────────╮
- │  ak-coder  v0.1.0                    │
+ │  ak-coder  v0.1.8                    │
  │  model  gemma3:4b                    │
  │  cwd    my-project                   │
  ╰──────────────────────────────────────╯
@@ -34,10 +34,12 @@ You'll see the Ink UI banner with model, workspace, and keyboard hints:
 | `/plan list` | List saved plan files |
 | `/plan show <file>` | Display a saved plan |
 | `/agent <role> \| <task>` | Spawn a sub-agent for a focused task |
-| `/history` | List saved sessions |
-| `/resume` | Resume a previous session |
+| `/history` | List saved sessions **for this workspace** |
+| `/resume` | Resume a previous session (this workspace only) |
 | `/fork` | Fork the current session at a turn |
 | `/rewind` | Rewind conversation to an earlier turn |
+| `/skills` | List loaded skills |
+| `/skills reload` | Rescan workspace for `SKILL.md` files |
 | `/context` | Dump session, tools, skills, and system prompt |
 | `/settings` | View or edit config keys |
 | `/stats` | Token and latency summary |
@@ -46,7 +48,21 @@ You'll see the Ink UI banner with model, workspace, and keyboard hints:
 | `/ping` | Check LLM endpoint latency |
 | `/exit` | Exit the REPL |
 
-Skills appear in `/help` and are invoked as `/skills:<name>` (e.g. `/skills:review`). A legacy `/skillname` form also works.
+Skills appear in `/help` and are invoked as `/skills:<name>` (e.g. `/skills:review`). Press **Tab** after `/skills` or `/skills:` for completion. A legacy `/skillname` form also works.
+
+Sessions are stored under `~/.ak-coder/history/workspaces/<folder>-<hash>/` — only sessions from the directory you started ak-coder in appear in `/history`.
+
+## Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| **Shift+Tab** | Cycle confirmation mode (`default` ↔ `plan`) |
+| **Ctrl+R** | Fuzzy search input history |
+| **Ctrl+C** | Interrupt in-flight request (or clear input / exit) |
+| **Tab** | Complete slash commands and `/skills:<name>` |
+| `!cmd` | Run shell command without sending to agent |
+
+For stuck prompts or missing tool activity, run with `--debug` — see [Configuration: Debug logging](/docs/getting-started/configuration#debug-logging).
 
 ## Your first conversation
 

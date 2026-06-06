@@ -33,6 +33,8 @@ Shows a colored unified diff before overwriting. **New files** are written immed
 
 Plugins can intercept writes via `beforeWriteFile` / `afterWriteFile` hooks to transform content or cancel the write.
 
+When the path ends with `SKILL.md`, a successful write also triggers an in-memory **skills reload** — new or updated skills are available for `/skills:<name>` and tab completion without restarting the CLI.
+
 ---
 
 ## str_replace

@@ -29,14 +29,16 @@ See [ADR 03: Plugin System & Hooks](/docs/adrs/plugin_system_hooks) and [ADR 07:
 
 ## Skills (slash commands)
 
-Skills are markdown instruction files loaded at startup. Typing `/skillname` injects the skill body (plus any arguments) into the agent context.
+Skills are markdown instruction files loaded at startup and on reload. Typing `/skills:<name>` injects the skill body (plus any arguments) into the agent context.
 
 **Getting started:** [Skills](/docs/plugins/skills)
 
 Key points:
 
 - Any file named `SKILL.md` anywhere in the workspace is discovered automatically
-- Front-matter `name` drives the slash command; `description` appears in `/help`
+- Front-matter `name` drives the slash command; `description` appears in `/help` and tab completion
+- `/skills reload` rescans; editing a `SKILL.md` via write tools also triggers reload
 - Skills are instructions for the LLM — they do not add new executable tools
+- Tab completion: type `/skills:` + **Tab** to pick a loaded skill
 
 See [ADR 04: Skills System](/docs/adrs/skills_system).
