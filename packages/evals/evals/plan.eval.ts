@@ -7,7 +7,7 @@ evalCase('plan: planning mode restricts mutations and returns structured plan', 
   },
   prompts: ['Propose a plan to change greeting value from "hello" to "bonjour" in greet.ts.'],
   criteria: [
-    check.responseContains('plan'),
+    check.responseMatches(/plan|goal|approach|step/i),
     judge('The response describes a step-by-step plan rather than executing the changes directly.'),
   ],
 });

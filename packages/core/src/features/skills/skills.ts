@@ -5,6 +5,7 @@ export interface SkillDefinition {
   name: string;
   description: string;
   content: string;
+  path?: string;
 }
 
 export class SkillsManager {
@@ -21,10 +22,13 @@ export class SkillsManager {
   }
 
   async loadSkills(workspaceRoot: string): Promise<void> {
-    this.loadedSkills = [];
     try {
       const allFiles = await this.fs.listFiles(workspaceRoot);
       const skillFiles = allFiles.filter(f => f.endsWith('SKILL.md'));
+
+      // Remove any previously loaded skills from this workspaceRoot
+      const normalizedRoot = workspaceRoot.replace(/\/$/, '') + '/';
+      this.loadedSkills = this.loadedSkills.filter(s => !s.path || !s.path.startsWith(normalizedRoot));
 
       for (const file of skillFiles) {
         try {
@@ -38,7 +42,8 @@ export class SkillsManager {
           this.loadedSkills.push({
             name: parsed.name || parentFolder || 'unknown-skill',
             description: parsed.description || '',
-            content: rawContent
+            content: rawContent,
+            path: file
           });
           this.logger.info(`Loaded skill: ${parsed.name || parentFolder || file}`);
         } catch (e) {

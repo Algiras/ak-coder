@@ -171,4 +171,3 @@ This section is used to verify file editing and Markdown rendering.
 const test = "This is a code block inside the file";
 console.log(test);
 ```
-
