@@ -38,8 +38,8 @@ describe('Piped Stdin One-Shot Mode', () => {
 
     // 2. Spawn the CLI in non-interactive piping mode
     const cliPath = 'src/index.ts';
-    const child = spawn('bun', ['run', cliPath, 'Test Prompt'], {
-      cwd: '/Users/algimantask/Personal/ak-coder/apps/cli',
+    const child = spawn(process.execPath, ['run', cliPath, 'Test Prompt'], {
+      cwd: path.resolve(__dirname, '..'),
       env: {
         ...process.env,
         HOME: tempHome,
