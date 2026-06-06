@@ -12,6 +12,7 @@
     "format": "bunx prettier --write \"**/*.{ts,json,md}\"",
     "start": "bun run apps/cli/src/index.ts",
     "build:cli": "bun run --filter @algiras/ak-coder build",
+    "publish:npm": "bash scripts/publish-cli.sh",
     "postinstall": "node scripts/patch-signal-exit.mjs"
   },
   "devDependencies": {

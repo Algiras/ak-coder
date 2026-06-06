@@ -19,7 +19,7 @@
       "bin": {
         "ak-coder": "dist/index.js",
       },
-      "dependencies": {
+      "devDependencies": {
         "@ak-coder/core": "workspace:*",
         "@claude-code-kit/ink-renderer": "^0.3.1",
         "@claude-code-kit/ui": "^0.3.1",
