@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { CommandSafetyGate } from '../src/safety';
+import { CommandSafetyGate } from '../src/features/safety/safety';
 import { MockFileSystem } from '../src/mocks';
 
 describe('CommandSafetyGate', () => {

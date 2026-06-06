@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { AgentCore } from '../src/agent';
 import { ChatMessage } from '../src/ports';
-import { AgentHooks } from '../src/hooks';
+import { AgentHooks } from '../src/features/hooks/hooks';
 import {
   MockFileSystem,
   MockSessionStore,
@@ -100,7 +100,7 @@ describe('AgentCore Hooks System', () => {
       }
     });
 
-    mockNio.confirms = [true]; // user approves writing changes
+    mockNio.confirmResults = [{ approved: true, applyToAll: false }]; // user approves writing changes
     mockLlm.responses = [
       {
         text: 'Read first',
@@ -169,7 +169,7 @@ describe('AgentCore Hooks System', () => {
       }
     });
 
-    mockNio.confirms = [true];
+    mockNio.confirmResults = [{ approved: true, applyToAll: false }];
     mockLlm.responses = [
       {
         text: 'Read first',
@@ -226,7 +226,7 @@ describe('AgentCore Hooks System', () => {
           {
             id: 'cmd_1',
             type: 'function',
-            function: { name: 'execute_command', arguments: JSON.stringify({ command: 'ls' }) }
+            function: { name: 'bash', arguments: JSON.stringify({ command: 'ls' }) }
           }
         ]
       },
@@ -246,7 +246,7 @@ describe('AgentCore Hooks System', () => {
           {
             id: 'cmd_cancel',
             type: 'function',
-            function: { name: 'execute_command', arguments: JSON.stringify({ command: 'cancel-command' }) }
+            function: { name: 'bash', arguments: JSON.stringify({ command: 'cancel-command' }) }
           }
         ]
       },

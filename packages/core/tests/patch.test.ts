@@ -56,7 +56,7 @@ describe('AgentCore patch_file Tool', () => {
     const originalContent = 'line 1\nline 2\nline 3\n';
     await mockFs.writeFile('/workspace/file.txt', originalContent);
 
-    mockNio.confirms = [true]; // user approves patch
+    mockNio.confirmResults = [{ approved: true, applyToAll: false }]; // user approves patch
     mockLlm.responses = [
       {
         text: 'Read first to unlock write lock',

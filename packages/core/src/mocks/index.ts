@@ -1,4 +1,4 @@
-import { FileSystem, TerminalIo, ProcessRunner, LLMService, SessionStore, Logger, ChatMessage } from '../ports';
+import { FileSystem, TerminalIo, ProcessRunner, LLMService, SessionStore, Logger, ChatMessage, ConfirmationRequest, ConfirmationResult } from '../ports';
 
 export class MockFileSystem implements FileSystem {
   public files = new Map<string, string>();
@@ -14,7 +14,13 @@ export class MockFileSystem implements FileSystem {
   }
 
   async exists(path: string): Promise<boolean> {
-    return this.files.has(path);
+    if (this.files.has(path)) return true;
+    // Also return true for directory paths that are prefixes of known files
+    const prefix = path.endsWith('/') ? path : path + '/';
+    for (const key of this.files.keys()) {
+      if (key.startsWith(prefix)) return true;
+    }
+    return false;
   }
 
   async deleteFile(path: string): Promise<void> {
@@ -29,6 +35,7 @@ export class MockFileSystem implements FileSystem {
 export class MockTerminalIo implements TerminalIo {
   public inputs: string[] = [];
   public confirms: boolean[] = [];
+  public confirmResults: ConfirmationResult[] = [];
   public outputs: string[] = [];
   public errors: string[] = [];
   public selectedMenuIndex = 0;
@@ -49,6 +56,11 @@ export class MockTerminalIo implements TerminalIo {
 
   writeError(text: string): void {
     this.errors.push(text);
+  }
+
+  async confirm(request: ConfirmationRequest): Promise<ConfirmationResult> {
+    const result = this.confirmResults.shift();
+    return result ?? { approved: false, applyToAll: false };
   }
 
   async selectMenu<T>(message: string, choices: { name: string; value: T }[]): Promise<T> {
@@ -112,6 +124,22 @@ export class MockSessionStore implements SessionStore {
       sessionId: id,
       timestamp: Date.now()
     }));
+  }
+
+  async forkSession(sessionId: string, turnIndex: number, newSessionId: string): Promise<ChatMessage[]> {
+    const history = this.sessions.get(sessionId);
+    if (!history) throw new Error(`Session ${sessionId} not found`);
+    if (turnIndex < 0 || turnIndex >= history.length) {
+      throw new Error(`Turn index ${turnIndex} out of bounds (history size: ${history.length})`);
+    }
+    const forked = history.slice(0, turnIndex + 1);
+    this.sessions.set(newSessionId, forked);
+    return forked;
+  }
+
+  async truncateSession(sessionId: string, keepCount: number): Promise<void> {
+    const history = this.sessions.get(sessionId) ?? [];
+    this.sessions.set(sessionId, history.slice(0, keepCount));
   }
 
   async recordCall(record: any): Promise<void> {

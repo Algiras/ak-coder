@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { IgnoreMatcher } from '../src/ignore';
+import { IgnoreMatcher } from '../src/features/ignore/ignore';
 import { AgentCore } from '../src/agent';
 import {
   MockFileSystem,

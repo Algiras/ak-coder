@@ -29,3 +29,8 @@ The CLI client (`apps/cli`) is the interactive terminal interface for the `ak-co
 *   `/resume <session_id>` - Resumes a session.
 *   `/fork <turn_index>` - Forks the current session.
 *   `/exit` - Gracefully exits the shell.
+
+### 5. Non-interactive & Integration Modes
+*   **One-shot Piped Mode**: When the CLI is executed in a non-interactive shell (without TTY), it consumes the entire `stdin` stream as input context, executes the agent loop once against the prompt passed in arguments, prints the raw response to `stdout`, and exits.
+*   **Stdio MCP Server Mode**: Passing the `--stdio` flag starts a headless Model Context Protocol (MCP) server communicating over JSON-RPC over `stdin` and `stdout`, allowing external editors or integrations to invoke tools and send messages.
+
