@@ -23,6 +23,7 @@
     "build": "bun build src/index.ts --target bun --outfile dist/index.js --external react-devtools-core && chmod +x dist/index.js"
   },
   "dependencies": {
+    "@ak-coder/core": "workspace:*",
     "@claude-code-kit/ink-renderer": "^0.3.1",
     "@claude-code-kit/ui": "^0.3.1",
     "@types/react": "^19.2.15",

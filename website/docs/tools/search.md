@@ -4,6 +4,8 @@ sidebar_position: 4
 
 # Search Tools
 
+Read-only search tools run [in parallel](/docs/tools/annotations) when the LLM calls several in one turn.
+
 ## glob
 
 Finds files matching a glob pattern in the workspace.
@@ -33,6 +35,8 @@ Searches file contents for a text pattern or regex.
 ## index_workspace
 
 Builds a TF-IDF vector index of all workspace files. Must be called once before `semantic_search` can be used. The index lives in memory for the session.
+
+**Annotations:** none — mutates the in-memory vector index (session state), so it is not read-only and runs sequentially. See [Tool Annotations](/docs/tools/annotations).
 
 **Parameters:**
 - `extensions` (string[], optional) — file extensions to include, e.g. `[".ts", ".md"]`. Defaults to common code and text extensions.
