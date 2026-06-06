@@ -6,39 +6,71 @@ sidebar_position: 2
 
 ## read_file
 
-Reads a file and returns its content. The agent **must** call `read_file` before `str_replace` or `patch_file` — this prevents blind edits.
+Reads a file and returns its content.
+
+**Annotations:** read-only · idempotent
 
 **Parameters:**
-- `path` (string) — absolute or workspace-relative path
+- `path` (string, required) — workspace-relative path
+
+The agent **must** call `read_file` before `write_file`, `str_replace`, or `patch_file`. This read-before-write lock prevents blind edits. Attempting to write without reading first returns an error.
+
+---
 
 ## write_file
 
-Writes content to a file. Creates parent directories if needed. Shows a colored diff before writing (unless confirmation policy is `yolo`).
+Writes complete new content to a file. Creates parent directories if needed.
+
+**Annotations:** destructive
 
 **Parameters:**
-- `path` (string) — file path
-- `content` (string) — full file content
+- `path` (string, required) — workspace-relative path
+- `content` (string, required) — full file content to write
+
+Shows a colored unified diff before writing. Requires user confirmation unless the session policy is `yolo`. The file must have been read first in the current session.
+
+Plugins can intercept writes via `beforeWriteFile` / `afterWriteFile` hooks to transform content or cancel the write.
+
+---
 
 ## str_replace
 
-Replaces an exact string in a file. Requires the file to have been read first in the current session.
+Replaces an exact string in a file. Simpler than `patch_file` for targeted single-location edits.
+
+**Annotations:** destructive
 
 **Parameters:**
-- `path` (string) — file path
-- `old_string` (string) — exact text to find (must be unique in the file)
-- `new_string` (string) — replacement text
+- `path` (string, required) — workspace-relative path
+- `old_string` (string, required) — exact text to replace (must appear exactly once in the file)
+- `new_string` (string, required) — replacement text
+
+The file must have been read first. If `old_string` matches more than once, the operation is rejected to prevent ambiguous edits.
+
+---
 
 ## patch_file
 
-Applies a unified diff patch to a file. Requires the file to have been read first.
+Applies a list of search-and-replace patches to a file sequentially. Preferred over `write_file` for editing existing files — only the changed blocks need to be specified.
+
+**Annotations:** destructive
 
 **Parameters:**
-- `path` (string) — file path
-- `patch` (string) — unified diff format
+- `path` (string, required) — workspace-relative path
+- `patches` (array, required) — list of patch objects:
+  - `find` (string) — exact block of code to find (including whitespace and indentation)
+  - `replace` (string) — replacement block
+
+Patches are applied in order. Each `find` must match exactly. The file must have been read first.
+
+---
 
 ## list_directory
 
-Lists files and directories at a path. Respects `.akcoderignore` and `.gitignore`.
+Lists files and directories at a path.
+
+**Annotations:** read-only · idempotent
 
 **Parameters:**
-- `path` (string) — directory path (defaults to workspace root)
+- `path` (string, required) — directory path (pass `.` for workspace root)
+
+Respects `.akcoderignore` and `.gitignore` patterns.
