@@ -32,6 +32,7 @@ import { MessageRenderer } from './components/MessageRenderer';
 import { SelectInteraction } from './components/SelectInteraction';
 import { ThinkingPanel } from './components/ThinkingPanel';
 import { SubAgentPanel } from './components/SubAgentPanel';
+import { WorkingStatus } from './components/WorkingStatus';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,7 +58,6 @@ export interface AkCoderREPLProps {
   vimMode: boolean;
   history: string[];
   activityLabel?: string | null;
-  spinner?: React.ReactNode;
   assistantName?: string;
   onSubmit: (text: string) => Promise<void>;
   onShellRun: (cmd: string) => Promise<void>;
@@ -81,7 +81,6 @@ export function AkCoderREPL({
   vimMode,
   history,
   activityLabel,
-  spinner,
   assistantName = 'AKCoder',
   onSubmit,
   onShellRun,
@@ -231,15 +230,6 @@ export function AkCoderREPL({
               </Box>
             </Box>
           )}
-          {isLoading && !streamingContent && !streamingThinking && !subAgent && (
-            <Box marginTop={messages.length > 0 ? 1 : 0} flexDirection="column">
-              {activityLabel ? (
-                <Text color="cyan">  ⠋ {activityLabel}</Text>
-              ) : (
-                spinner ?? <Text color="cyan">  thinking…</Text>
-              )}
-            </Box>
-          )}
         </Box>
 
         {/* Ctrl+R history search */}
@@ -264,6 +254,10 @@ export function AkCoderREPL({
         )}
 
         <Divider />
+
+        {isLoading && !permissionRequest && !historyOpen && !selectInteraction && (
+          <WorkingStatus activityLabel={activityLabel} subAgent={subAgent} />
+        )}
 
         {/* Permission request or prompt input */}
         {permissionRequest ? (

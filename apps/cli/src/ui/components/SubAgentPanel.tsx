@@ -36,13 +36,11 @@ export function SubAgentPanel({ role, depth, content, thinking, activityLabel }:
           </Box>
         ) : null}
 
-        {!thinkingText && !contentText && activityLabel ? (
+        {activityLabel ? (
           <Box marginTop={1}>
             <Text color="cyan">⠋ {activityLabel}</Text>
           </Box>
-        ) : null}
-
-        {!thinkingText && !contentText && !activityLabel ? (
+        ) : !thinkingText && !contentText ? (
           <Box marginTop={1}>
             <Text dimColor>Starting…</Text>
           </Box>
