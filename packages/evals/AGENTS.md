@@ -173,7 +173,7 @@ Human-readable run report containing:
 ### `reports/<YYYY-MM-DD>/cases/<slug>.md`
 Per-case detail files with per-provider stability and per-criterion breakdown.
 
-Both `eval_results.jsonl` and `reports/` are gitignored — they are local run artifacts.
+`eval_results.jsonl`, `eval_report.json`, and `reports/` are gitignored — they are local run artifacts. `eval_report.md` is **committed** as the human-readable versioned snapshot.
 
 ---
 

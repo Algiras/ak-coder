@@ -373,6 +373,53 @@ export async function runAll(options: RunOptions = {}): Promise<void> {
 
     console.log(`Reports written to: ${reportsDir}/`);
     console.log(`  summary.md + ${cases.length} case files in cases/`);
+
+    // ── 4. Write eval_report.md — human-readable snapshot at repo root ─────────
+    const reportMdPath = path.join(evalsRoot, 'eval_report.md');
+    let md = `# LLM Provider Evaluation Report\n\n`;
+    md += `Generated on: ${new Date().toISOString()}\n`;
+    md += `Total cases: ${cases.length}  |  Runs per case: ${numRuns}\n\n`;
+    md += `## Summary\n\n`;
+    md += `| Provider | Model | Stable Pass Rate | Avg Latency | Avg Tokens |\n`;
+    md += `| --- | --- | --- | --- | --- |\n`;
+    for (const rep of reports) {
+      md += `| **${rep.providerName}** | \`${rep.model}\` | ${rep.passRate} | ${rep.avgLatency} | ${rep.avgTokens} |\n`;
+    }
+    md += `\n## Binary Score Matrix\n\n`;
+    md += `| Case | ` + reports.map(rep => `${rep.providerName} (\`${rep.model}\`)`).join(' | ') + ` |\n`;
+    md += `| --- | ` + reports.map(() => `---`).join(' | ') + ` |\n`;
+    for (const c of cases) {
+      const rowScores = reports.map(rep => {
+        const s = rep.stability.get(c.name);
+        if (!s) return '?';
+        if (s.passes === s.runs) return numRuns > 1 ? `**1** (${s.passes}/${s.runs})` : '**1**';
+        if (s.passes === 0) return numRuns > 1 ? `0 (${s.passes}/${s.runs})` : '0';
+        return `⚠️ (${s.passes}/${s.runs})`;
+      });
+      md += `| ${c.name} | ` + rowScores.join(' | ') + ` |\n`;
+    }
+    md += `\n## Provider Details\n\n`;
+    for (const rep of reports) {
+      md += `### ${rep.providerName} (\`${rep.model}\`)\n`;
+      md += `- **Stable Pass Rate**: ${rep.passRate}\n`;
+      md += `- **Avg Latency**: ${rep.avgLatency}\n`;
+      md += `- **Avg Tokens**: ${rep.avgTokens}\n\n`;
+      md += `| Case | Status | Stability | Latency | Tokens | Failures |\n`;
+      md += `| --- | --- | --- | --- | --- | --- |\n`;
+      for (const r of rep.results) {
+        const s = rep.stability.get(r.name);
+        const status = r.error ? 'ERROR' : r.pass ? '✅ PASS' : '❌ FAIL';
+        const stability = !s ? '?' : s.passes === s.runs ? `${s.passes}/${s.runs}` : `⚠️ ${s.passes}/${s.runs}`;
+        const latency = (r.latencyMs / 1000).toFixed(1) + 's';
+        const failures = r.error
+          ? `Error: ${r.error}`
+          : r.criteria.filter(c => !c.pass).map(c => `✗ ${c.description}${c.reasoning ? ` (${c.reasoning})` : ''}`).join('<br>');
+        md += `| ${r.name} | ${status} | ${stability} | ${latency} | ${r.totalTokens} | ${failures} |\n`;
+      }
+      md += '\n';
+    }
+    await fs.writeFile(reportMdPath, md, 'utf8');
+    console.log(`Human-readable report: ${reportMdPath}`);
   }
 
   if (!overallPass) {

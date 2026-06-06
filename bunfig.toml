@@ -1,2 +1,2 @@
 [install]
-registry = "https://npm.dev.wixpress.com"
+registry = "https://registry.npmjs.org"
