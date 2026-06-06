@@ -52,22 +52,23 @@ Do not write any markdown blocks or commentary.`;
   }
 }
 
-describe('Local Ollama E2E Evals', () => {
+// Run with: RUN_OLLAMA_EVALS=1 bun test packages/core/tests/ollama_evals.test.ts
+const runOllamaEvals = !!process.env.RUN_OLLAMA_EVALS;
+
+describe.skipIf(!runOllamaEvals)('Local Ollama E2E Evals', () => {
   async function detectModel(): Promise<string> {
-    let selectedModel = 'gemma4:latest';
+    const preferred = ['gemma4:31b-cloud', 'gemma4:12b-mlx', 'gemma4:latest'];
     try {
       const response = await fetch('http://127.0.0.1:11434/api/tags');
       if (response.ok) {
         const data = await response.json() as { models: { name: string }[] };
         const modelNames = data.models.map(m => m.name);
-        if (modelNames.includes('gemma4:12b-mlx')) {
-          return 'gemma4:12b-mlx';
-        } else if (modelNames.includes('gemma4:latest')) {
-          return 'gemma4:latest';
+        for (const model of preferred) {
+          if (modelNames.includes(model)) return model;
         }
       }
     } catch {}
-    return selectedModel;
+    return 'gemma4:latest';
   }
 
   it('should run dialogue through local Ollama instance', async () => {
@@ -180,4 +181,140 @@ You must prefix every response with exactly the words 'OUI OUI' followed by a sp
 
     expect(res.text.toUpperCase()).toContain('OUI OUI');
   }, 120000);
+
+  it('Eval: web_fetch — agent fetches a real URL and extracts meaningful text', async () => {
+    const mockFs = new MockFileSystem();
+    const mockStore = new MockSessionStore();
+    const mockLogger = new MockLogger();
+    const model = await detectModel();
+    const llm = new OpenAICompatibleLLMService('mock-key', 'http://127.0.0.1:11434/v1', model);
+    const agent = new AgentCore(mockFs, llm, mockStore, mockLogger);
+    const judge = new LLMJudge(llm);
+
+    console.log(`[Evals] web_fetch eval with: ${model}`);
+    await agent.startSession('ollama-webfetch-sess');
+
+    const result = await agent.processMessage(
+      'Use web_fetch to fetch https://example.com and tell me the title or main heading of the page. One sentence.'
+    );
+    console.log(`[Evals] web_fetch response: ${result.text}`);
+
+    const evaluation = await judge.evaluate({
+      prompt: 'Fetch https://example.com and state the title or main heading.',
+      response: result.text,
+      criteria: 'The response mentions "Example Domain" or similar content from example.com.'
+    });
+    console.log(`[Evals] Judge: ${evaluation.pass ? 'PASS' : 'FAIL'} | ${evaluation.reasoning}`);
+    expect(evaluation.pass).toBe(true);
+  }, 90000);
+
+  it('Eval: glob — agent uses glob to find TypeScript files in a workspace', async () => {
+    const mockFs = new MockFileSystem();
+    mockFs.files.set('/ws/src/app.ts', 'export const x = 1;');
+    mockFs.files.set('/ws/src/util.ts', 'export const y = 2;');
+    mockFs.files.set('/ws/README.md', '# docs');
+    const mockStore = new MockSessionStore();
+    const mockLogger = new MockLogger();
+    const model = await detectModel();
+    const llm = new OpenAICompatibleLLMService('mock-key', 'http://127.0.0.1:11434/v1', model);
+    // No real processRunner — uses in-process glob fallback
+    const agent = new AgentCore(mockFs, llm, mockStore, mockLogger, undefined, undefined, '/ws');
+    const judge = new LLMJudge(llm);
+
+    console.log(`[Evals] glob eval with: ${model}`);
+    await agent.startSession('ollama-glob-sess');
+
+    const result = await agent.processMessage(
+      'Use the glob tool with pattern "**/*.ts" to list all TypeScript files in the workspace. Tell me the filenames you found.'
+    );
+    console.log(`[Evals] glob response: ${result.text}`);
+
+    const evaluation = await judge.evaluate({
+      prompt: 'List TypeScript files using glob **/*.ts',
+      response: result.text,
+      criteria: 'The response mentions app.ts and util.ts (the TypeScript files in the workspace).'
+    });
+    console.log(`[Evals] Judge: ${evaluation.pass ? 'PASS' : 'FAIL'} | ${evaluation.reasoning}`);
+    expect(evaluation.pass).toBe(true);
+  }, 90000);
+
+  it('Eval: str_replace — agent uses str_replace to make a targeted edit', async () => {
+    const mockFs = new MockFileSystem();
+    mockFs.files.set('/ws/greet.ts', 'export function greet() { return "hello"; }\n');
+    const mockStore = new MockSessionStore();
+    const mockLogger = new MockLogger();
+    const model = await detectModel();
+    const llm = new OpenAICompatibleLLMService('mock-key', 'http://127.0.0.1:11434/v1', model);
+    const { MockTerminalIo } = await import('../src/mocks');
+    const nio = new MockTerminalIo();
+    nio.confirmResults = [{ approved: true, applyToAll: true }];
+    const agent = new AgentCore(mockFs, llm, mockStore, mockLogger, undefined, nio, '/ws');
+
+    console.log(`[Evals] str_replace eval with: ${model}`);
+    await agent.startSession('ollama-str-replace-sess');
+
+    const result = await agent.processMessage(
+      'Read /ws/greet.ts, then use str_replace to change the return value from "hello" to "world". Apply the change.'
+    );
+    console.log(`[Evals] str_replace response: ${result.text}`);
+
+    const fileContent = mockFs.files.get('/ws/greet.ts') ?? '';
+    console.log(`[Evals] File after edit: ${fileContent}`);
+    expect(fileContent).toContain('"world"');
+  }, 90000);
+
+  it('Eval: /resume — agent session persists and resumes correctly', async () => {
+    const mockFs = new MockFileSystem();
+    const mockStore = new MockSessionStore();
+    const mockLogger = new MockLogger();
+    const model = await detectModel();
+    const llm = new OpenAICompatibleLLMService('mock-key', 'http://127.0.0.1:11434/v1', model);
+    const agent = new AgentCore(mockFs, llm, mockStore, mockLogger);
+
+    console.log(`[Evals] resume eval with: ${model}`);
+    await agent.startSession('resume-test-session');
+
+    await agent.processMessage('Remember: the magic number is 42.');
+    await mockStore.saveSession('resume-test-session', agent.getMessages());
+
+    // Start fresh, then resume
+    const agent2 = new AgentCore(mockFs, llm, mockStore, mockLogger);
+    await agent2.startSession('resume-test-session');
+
+    const result = await agent2.processMessage('What is the magic number I told you about?');
+    console.log(`[Evals] Resume response: ${result.text}`);
+    expect(result.text).toContain('42');
+  }, 90000);
+
+  it('Eval: bash — agent runs a real shell command and reports output', async () => {
+    const mockFs = new MockFileSystem();
+    const mockStore = new MockSessionStore();
+    const mockLogger = new MockLogger();
+    const model = await detectModel();
+    const llm = new OpenAICompatibleLLMService('mock-key', 'http://127.0.0.1:11434/v1', model);
+
+    const { NodeProcessRunner } = await import('../../../apps/cli/src/adapters/process');
+    const { MockTerminalIo } = await import('../src/mocks');
+    const nio = new MockTerminalIo();
+    nio.confirmResults = [{ approved: true, applyToAll: true }]; // approve any prompts
+
+    const agent = new AgentCore(mockFs, llm, mockStore, mockLogger, new NodeProcessRunner(), nio);
+    const judge = new LLMJudge(llm);
+
+    console.log(`[Evals] bash eval with: ${model}`);
+    await agent.startSession('ollama-bash-sess');
+
+    const result = await agent.processMessage(
+      'Use the bash tool to run "echo hello-from-bash" and tell me what it printed.'
+    );
+    console.log(`[Evals] bash response: ${result.text}`);
+
+    const evaluation = await judge.evaluate({
+      prompt: 'Run echo hello-from-bash and report the output.',
+      response: result.text,
+      criteria: 'The response mentions "hello-from-bash" as the output of the command.'
+    });
+    console.log(`[Evals] Judge: ${evaluation.pass ? 'PASS' : 'FAIL'} | ${evaluation.reasoning}`);
+    expect(evaluation.pass).toBe(true);
+  }, 90000);
 });

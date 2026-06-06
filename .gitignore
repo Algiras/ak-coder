@@ -17,3 +17,9 @@ build/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Env files
+.env
+
+# Docusaurus build cache
+website/.docusaurus/

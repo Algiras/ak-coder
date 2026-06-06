@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { MockFileSystem } from '../src/mocks';
 import { ConfigManager } from '../src/config';
-import { FileSessionStore } from '../src/history';
+import { FileSessionStore } from '../src/features/history/history';
 import { FileLogger } from '../src/logger';
 import { ChatMessage } from '../src/ports';
 import * as fs from 'fs';
@@ -85,6 +85,39 @@ describe('Core Logic Components', () => {
       const loadedFork = await store.loadSession('forked');
       expect(loadedFork).toHaveLength(2);
       expect(loadedFork[1].content).toBe('res 1');
+    });
+
+    it('should truncate a session to keepCount messages and persist', async () => {
+      const store = new FileSessionStore(mockFs, '/history');
+      const messages: ChatMessage[] = [
+        { role: 'user', content: 'turn 1' },
+        { role: 'assistant', content: 'reply 1' },
+        { role: 'user', content: 'turn 2' },
+        { role: 'assistant', content: 'reply 2' },
+        { role: 'user', content: 'turn 3' },
+      ];
+      await store.saveSession('trunc-sess', messages);
+
+      await store.truncateSession('trunc-sess', 2);
+
+      const loaded = await store.loadSession('trunc-sess');
+      expect(loaded).toHaveLength(2);
+      expect(loaded[0].content).toBe('turn 1');
+      expect(loaded[1].content).toBe('reply 1');
+    });
+
+    it('should leave session unchanged when keepCount >= length', async () => {
+      const store = new FileSessionStore(mockFs, '/history');
+      const messages: ChatMessage[] = [
+        { role: 'user', content: 'a' },
+        { role: 'assistant', content: 'b' },
+      ];
+      await store.saveSession('trunc-noop', messages);
+
+      await store.truncateSession('trunc-noop', 10);
+
+      const loaded = await store.loadSession('trunc-noop');
+      expect(loaded).toHaveLength(2);
     });
 
     it('should record and load LLM call history for budget tracking', async () => {

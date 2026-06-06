@@ -10,6 +10,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
     "baseUrl": ".",
     "paths": {
       "@ak-coder/core": ["packages/core/src/index.ts"],

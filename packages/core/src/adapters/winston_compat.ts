@@ -220,7 +220,7 @@ export class CompatLoggerInstance {
         const transportWeight = levels[transport.level] ?? 2;
         if (logLevelWeight > transportWeight) continue;
       }
-      transport.log(formatted);
+      transport.log(formatted as LogInfo | string);
     }
   }
 
