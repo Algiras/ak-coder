@@ -91,6 +91,36 @@ export class ConfigManager {
       };
     }
 
+    if (!providers.gemini) {
+      providers.gemini = {
+        apiKey: process.env.GEMINI_API_KEY || 'mock-key',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        model: 'gemini-1.5-flash',
+        costInput: 0.075,
+        costOutput: 0.30,
+      };
+    }
+
+    if (!providers.deepseek) {
+      providers.deepseek = {
+        apiKey: process.env.DEEPSEEK_API_KEY || 'mock-key',
+        baseUrl: 'https://api.deepseek.com/v1',
+        model: 'deepseek-chat',
+        costInput: 0.14,
+        costOutput: 0.28,
+      };
+    }
+
+    if (!providers.openrouter) {
+      providers.openrouter = {
+        apiKey: process.env.OPENROUTER_API_KEY || 'mock-key',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        model: 'meta-llama/llama-3-8b-instruct:free',
+        costInput: 0.0,
+        costOutput: 0.0,
+      };
+    }
+
     let apiKey = typeof data.apiKey === 'string' ? data.apiKey : (process.env.OPENAI_API_KEY || 'mock-key');
     let baseUrl = typeof data.baseUrl === 'string' ? data.baseUrl : (process.env.OPENAI_API_BASE || 'https://api.openai.com/v1');
     let model = typeof data.model === 'string' ? data.model : 'gpt-4o';

@@ -15,6 +15,9 @@ describe('ConfigManager', () => {
     expect(config.providers!.openai).toBeDefined();
     expect(config.providers!.ollama).toBeDefined();
     expect(config.providers!.groq).toBeDefined();
+    expect(config.providers!.gemini).toBeDefined();
+    expect(config.providers!.deepseek).toBeDefined();
+    expect(config.providers!.openrouter).toBeDefined();
     expect(config.activeProvider).toBe('openai');
   });
 
