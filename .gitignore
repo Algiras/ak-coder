@@ -21,6 +21,8 @@ Thumbs.db
 
 # Env files
 .env
+.npmrc.publish
+**/.npmrc.publish
 
 # Docusaurus build cache
 website/.docusaurus/

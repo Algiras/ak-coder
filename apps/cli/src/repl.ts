@@ -359,7 +359,11 @@ export const COMMANDS: Record<string, ReplCommand> = {
         let firstChunk = true;
         const response = await core.processMessage(msgText, [], (chunk) => {
           if (firstChunk) { process.stdout.write('\r\x1b[2K'); firstChunk = false; }
-          process.stdout.write(chunk);
+          if (chunk.type === 'thinking') {
+            process.stdout.write(`\x1b[90m${chunk.text}\x1b[0m`);
+          } else {
+            process.stdout.write(chunk.text);
+          }
         });
         process.stdout.write('\n');
         nio.write(`\x1b[90mTokens: ${response.inputTokens} in / ${response.outputTokens} out | Est Cost: $${response.cost.toFixed(5)}\x1b[0m\n`);
@@ -476,8 +480,12 @@ export const COMMANDS: Record<string, ReplCommand> = {
         const subSessionId = `sub-${Date.now()}`;
         await child.startSession(subSessionId);
 
-        const result = await child.processMessage(`Begin task: ${taskPrompt}`, [], (chunk: string) => {
-          process.stdout.write(chunk);
+        const result = await child.processMessage(`Begin task: ${taskPrompt}`, [], (chunk) => {
+          if (chunk.type === 'thinking') {
+            process.stdout.write(`\x1b[90m${chunk.text}\x1b[0m`);
+          } else {
+            process.stdout.write(chunk.text);
+          }
         });
         process.stdout.write('\n');
         nio.write(`\x1b[35m[Sub-agent "${role}" finished]\x1b[0m`);
@@ -770,7 +778,11 @@ export async function runRepl(core: AgentCore, nio: NodeTerminalIo, opts: ReplOp
           process.stdout.write('\r\x1b[2K');
           firstChunk = false;
         }
-        process.stdout.write(chunk);
+        if (chunk.type === 'thinking') {
+          process.stdout.write(`\x1b[90m${chunk.text}\x1b[0m`);
+        } else {
+          process.stdout.write(chunk.text);
+        }
       });
       process.stdout.write('\n');
       lastTurn = { ms: Date.now() - t0, outputTokens: response.outputTokens };

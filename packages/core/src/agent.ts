@@ -6,7 +6,8 @@ import {
   SessionStore,
   Logger,
   ChatMessage,
-  ToolDefinition
+  ToolDefinition,
+  StreamCallback,
 } from './ports';
 import { McpClient } from './features/mcp/mcp';
 import { CommandSafetyGate } from './features/safety/safety';
@@ -18,7 +19,7 @@ import { CoreToolDefinition, ToolContext, registerCoreTools } from './core-tools
 import { SkillsManager } from './features/skills/skills';
 import { RulesManager } from './features/rules/rules';
 import { zodToJsonSchema } from './features/tools/schema';
-import { formatToolCall } from './features/tools/utils';
+import { formatToolCall, showToolActivity, clearToolActivity } from './features/tools/utils';
 import { AgentContextManager } from './features/context/context';
 import { AgentSessionManager } from './features/history/session';
 import { AgentCompactor } from './features/compaction/compactor';
@@ -388,7 +389,7 @@ export class AgentCore {
   async processMessage(
     userText: string,
     images: string[] = [],
-    streamCallback?: (chunk: string) => void,
+    streamCallback?: StreamCallback,
     signal?: AbortSignal
   ): Promise<{ text: string; inputTokens: number; outputTokens: number; cost: number; compacted: boolean }> {
     const spanId = this.logger.startSpan('processMessage');
@@ -416,7 +417,9 @@ export class AgentCore {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 
+    try {
     while (loopCount < maxLoops) {
+      if (signal?.aborted) throw new DOMException('Interrupted', 'AbortError');
       let systemPromptContent = `You are ak-coder, a powerful agentic terminal-based coding assistant.
 Your workspace contains files which may be injected above the user prompt.
 ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.agentsRules}]\n` : ''}`;
@@ -458,6 +461,8 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
       const combinedTools = await this.getCombinedToolsList();
 
       if (signal?.aborted) throw new DOMException('Interrupted', 'AbortError');
+
+      showToolActivity(this.terminalIo, 'Waiting for model…');
 
       const result = await this.llm.chat(payload, {
         stream: streamCallback,
@@ -525,15 +530,14 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
       });
 
       if (allReadOnly && toolCallsWithArgs.length > 1) {
-        if (this.terminalIo) {
-          const labels = toolCallsWithArgs.map(x => formatToolCall(x.tc.function.name, x.args)).join('  ·  ');
-          this.terminalIo.write(`\x1b[36m⠋ ${labels}\x1b[0m\n`);
-        }
+        const labels = toolCallsWithArgs.map(x => formatToolCall(x.tc.function.name, x.args)).join('  ·  ');
+        showToolActivity(this.terminalIo, labels);
         const settled = await Promise.allSettled(
           toolCallsWithArgs.map(({ tc, args }) =>
             this.executeSingleTool(tc.id, tc.function.name, args)
           )
         );
+        if (signal?.aborted) throw new DOMException('Interrupted', 'AbortError');
         for (let i = 0; i < toolCallsWithArgs.length; i++) {
           const { tc } = toolCallsWithArgs[i];
           const outcome = settled[i];
@@ -544,15 +548,14 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
         }
       } else {
         for (const { tc, args } of toolCallsWithArgs) {
-          if (this.terminalIo) {
-            this.terminalIo.write(`\x1b[36m⠋ ${formatToolCall(tc.function.name, args)}\x1b[0m\n`);
-          }
+          showToolActivity(this.terminalIo, formatToolCall(tc.function.name, args));
           let content: string;
           try {
             content = await this.executeSingleTool(tc.id, tc.function.name, args);
           } catch (e) {
             content = `Error: ${(e as Error).message}`;
           }
+          if (signal?.aborted) throw new DOMException('Interrupted', 'AbortError');
           this.messages.push({ role: 'tool', tool_call_id: tc.id, name: tc.function.name, content });
         }
       }
@@ -595,6 +598,9 @@ ${this.agentsRules ? `\n[Project-Specific Rules & Build Instructions:\n${this.ag
       cost,
       compacted
     };
+    } finally {
+      clearToolActivity(this.terminalIo);
+    }
   }
 
   private async executeSingleTool(toolCallId: string, toolName: string, args: any): Promise<string> {

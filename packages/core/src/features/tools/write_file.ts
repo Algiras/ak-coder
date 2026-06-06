@@ -10,15 +10,16 @@ const schema = z.object({
 export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schema> => ({
   name: 'write_file',
   annotations: { title: 'Write File', destructiveHint: true },
-  description: 'Write complete new content to a file. A unified diff will be shown and requires explicit user confirmation. You must read the file first in the current session before writing.',
+  description: 'Write complete new content to a file. New files are created immediately without a confirmation prompt. Overwriting an existing file requires read_file first and shows a diff for approval.',
   schema,
   handler: async (args) => {
     const resolvedPath = ctx.resolveWorkspacePath(args.path);
     let { content } = args;
     ctx.resetConsecutiveReads();
 
-    if (!ctx.readFiles.has(resolvedPath)) {
-      throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${args.path}" before you can write to it.`);
+    const exists = await ctx.fs.exists(resolvedPath);
+    if (exists && !ctx.readFiles.has(resolvedPath)) {
+      throw new Error(`Write-Only-After-Read lock violated: You must call 'read_file' on "${args.path}" before you can overwrite it.`);
     }
 
     if (ctx.hooks.beforeWriteFile) {
@@ -36,22 +37,30 @@ export const writeFileTool = (ctx: ToolContext): CoreToolDefinition<typeof schem
       }
     }
 
-    const oldContent = (await ctx.fs.exists(resolvedPath)) ? await ctx.fs.readFile(resolvedPath) : '';
-    const diffs = DiffEngine.compare(oldContent, content);
-    const coloredDiff = DiffEngine.renderColorDiff(diffs);
+    const writeMode = ctx.confirmationPolicy.getConfig().writes;
+    const mustConfirm = exists || writeMode === 'deny';
 
-    const confirmResult = await ctx.confirmationPolicy.check(
-      'write_file',
-      { action: 'write_file', description: `Write changes to ${args.path}`, detail: coloredDiff, path: args.path },
-      ctx.terminalIo
-    );
-    if (!confirmResult.approved) {
-      throw new Error(`User rejected changes to "${args.path}".`);
+    if (mustConfirm) {
+      const detail = exists
+        ? DiffEngine.renderColorDiff(DiffEngine.compare(await ctx.fs.readFile(resolvedPath), content))
+        : `Create new file ${args.path}`;
+
+      const confirmResult = await ctx.confirmationPolicy.check(
+        'write_file',
+        { action: 'write_file', description: exists ? `Write changes to ${args.path}` : `Create ${args.path}`, detail, path: args.path },
+        ctx.terminalIo
+      );
+      if (!confirmResult.approved) {
+        throw new Error(exists
+          ? `User rejected changes to "${args.path}".`
+          : `Write to "${args.path}" blocked by confirmation policy.`);
+      }
     }
 
     let writeSuccess = true;
     try {
       await ctx.fs.writeFile(resolvedPath, content);
+      ctx.readFiles.add(resolvedPath);
       ctx.markModified();
     } catch (e) {
       writeSuccess = false;

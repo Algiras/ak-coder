@@ -152,7 +152,7 @@ class QueueMockLlm {
   public responses: { text: string; tool_calls?: any[] }[] = [];
   async chat(messages: ChatMessage[], options?: any) {
     const resp = this.responses.shift() ?? { text: 'done' };
-    if (options?.stream && resp.text) options.stream(resp.text);
+    if (options?.stream && resp.text) options.stream({ type: 'content', text: resp.text });
     return { text: resp.text, inputTokens: 5, outputTokens: 5, tool_calls: resp.tool_calls };
   }
 }

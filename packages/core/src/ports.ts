@@ -82,16 +82,24 @@ export interface ChatMessage {
   name?: string;
 }
 
+/** Streaming payload from LLM adapters — content is the final answer, thinking is reasoning trace. */
+export type StreamChunk =
+  | { type: 'content'; text: string }
+  | { type: 'thinking'; text: string };
+
+export type StreamCallback = (chunk: StreamChunk) => void;
+
 export interface LLMService {
   chat(
     messages: ChatMessage[],
     options?: {
-      stream?: (chunk: string) => void;
+      stream?: StreamCallback;
       signal?: AbortSignal;
       tools?: ToolDefinition[];
     }
   ): Promise<{
     text: string;
+    thinking?: string;
     inputTokens: number;
     outputTokens: number;
     tool_calls?: ToolCall[];

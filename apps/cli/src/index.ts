@@ -1,4 +1,9 @@
 #!/usr/bin/env bun
+import React from 'react';
+import { render } from '@claude-code-kit/ink-renderer';
+import * as path from 'path';
+import * as os from 'os';
+import cliPkg from '../package.json';
 import {
   DependencyRegistry,
   AgentCore,
@@ -15,11 +20,7 @@ import { StdioJsonRpcAdapter } from './adapters/stdio';
 import { REPL_COMMAND_NAMES } from './repl';
 import { writePlanFile } from './plan-file';
 import { InkTerminalIo } from './ui/InkTerminalIo';
-import React from 'react';
-import { render } from '@claude-code-kit/ink-renderer';
 import { App } from './ui/App';
-import * as path from 'path';
-import * as os from 'os';
 
 // Global Error Boundary to prevent leaving terminal raw mode broken on crash
 function registerCrashBoundary() {
@@ -267,7 +268,7 @@ async function run() {
   process.stdout.write([
     '',
     `\x1b[36m ╭──────────────────────────────────────╮\x1b[0m`,
-    `\x1b[36m │\x1b[0m  \x1b[1;36m ${nameDisplay}\x1b[0m  \x1b[90mv0.1.0\x1b[0m                    \x1b[36m│\x1b[0m`,
+    `\x1b[36m │\x1b[0m  \x1b[1;36m ${nameDisplay}\x1b[0m  \x1b[90mv${cliPkg.version}\x1b[0m                    \x1b[36m│\x1b[0m`,
     `\x1b[36m │\x1b[0m  model  \x1b[33m${modelName.padEnd(30)}\x1b[0m\x1b[36m│\x1b[0m`,
     `\x1b[36m │\x1b[0m  cwd    \x1b[32m${dirName.slice(0, 30).padEnd(30)}\x1b[0m\x1b[36m│\x1b[0m`,
     `\x1b[36m ╰──────────────────────────────────────╯\x1b[0m`,

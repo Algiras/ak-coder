@@ -37,6 +37,7 @@ export interface AkCoderREPLProps {
   messages: Message[];
   isLoading: boolean;
   streamingContent: string | null;
+  streamingThinking?: string | null;
   statusSegments: StatusLineSegment[];
   permissionRequest?: PermissionRequestProps;
   selectInteraction?: {
@@ -46,6 +47,7 @@ export interface AkCoderREPLProps {
   };
   vimMode: boolean;
   history: string[];
+  activityLabel?: string | null;
   spinner?: React.ReactNode;
   assistantName?: string;
   onSubmit: (text: string) => Promise<void>;
@@ -62,11 +64,13 @@ export function AkCoderREPL({
   messages,
   isLoading,
   streamingContent,
+  streamingThinking,
   statusSegments,
   permissionRequest,
   selectInteraction,
   vimMode,
   history,
+  activityLabel,
   spinner,
   assistantName = 'AKCoder',
   onSubmit,
@@ -88,6 +92,15 @@ export function AkCoderREPL({
   }, [assistantName]);
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
+
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === 'c' && isLoading) {
+        onInterrupt();
+      }
+    },
+    { isActive: isLoading }
+  );
 
   useInput(
     (input, key) => {
@@ -185,8 +198,16 @@ export function AkCoderREPL({
             streamingContent={null}
             renderMessage={renderMessage}
           />
+          {streamingThinking && (
+            <Box flexDirection="column" marginTop={messages.length > 0 ? 1 : 0} marginLeft={2}>
+              <Text color="gray" bold>Thinking</Text>
+              <Box marginTop={0} flexDirection="column">
+                <StreamingMarkdown>{streamingThinking}</StreamingMarkdown>
+              </Box>
+            </Box>
+          )}
           {streamingContent && (
-            <Box flexDirection="column" marginTop={messages.length > 0 ? 1 : 0}>
+            <Box flexDirection="column" marginTop={messages.length > 0 || streamingThinking ? 1 : 0}>
               <Box>
                 <Text color="#DA7756">●</Text>
                 <Text color="#DA7756" bold> {assistantName}</Text>
@@ -196,8 +217,11 @@ export function AkCoderREPL({
               </Box>
             </Box>
           )}
-          {isLoading && !streamingContent && (
-            <Box marginTop={messages.length > 0 ? 1 : 0}>
+          {isLoading && !streamingContent && !streamingThinking && (
+            <Box marginTop={messages.length > 0 ? 1 : 0} flexDirection="column">
+              {activityLabel && (
+                <Text color="cyan">  ⠋ {activityLabel}</Text>
+              )}
               {spinner ?? <Text color="cyan">  thinking…</Text>}
             </Box>
           )}

@@ -16,6 +16,7 @@ describe('CommandSafetyGate', () => {
     expect(gate.classifyCommand('git diff src/index.ts')).toBe('safe');
     expect(gate.classifyCommand('ls -la')).toBe('safe');
     expect(gate.classifyCommand('cat package.json')).toBe('safe');
+    expect(gate.classifyCommand('touch README.md')).toBe('safe');
 
     expect(gate.classifyCommand('rm -rf node_modules')).toBe('unsafe');
     expect(gate.classifyCommand('bun install')).toBe('unsafe');
