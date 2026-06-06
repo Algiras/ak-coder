@@ -85,7 +85,7 @@ export class ConfigManager {
       providers.groq = {
         apiKey: process.env.GROQ_KEY || process.env.GROQ_API_KEY || 'mock-key',
         baseUrl: 'https://api.groq.com/openai/v1',
-        model: 'llama-3.1-70b-versatile',
+        model: 'openai/gpt-oss-120b',
         costInput: 0.59,
         costOutput: 0.79,
       };

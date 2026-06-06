@@ -16,5 +16,29 @@ import './evals/plan.eval';
 
 import { runAll } from './src';
 
-const filter = process.argv[2];
-runAll(filter).catch((e) => { console.error(e); process.exit(1); });
+const args = process.argv.slice(2);
+let filter: string | undefined = undefined;
+let providers: string[] | undefined = undefined;
+let report = false;
+
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  if (arg.startsWith('--filter=')) {
+    filter = arg.slice('--filter='.length);
+  } else if (arg === '--filter') {
+    filter = args[++i];
+  } else if (arg.startsWith('--providers=')) {
+    providers = arg.slice('--providers='.length).split(',').map(s => s.trim());
+  } else if (arg === '--providers') {
+    providers = args[++i].split(',').map(s => s.trim());
+  } else if (arg === '--report' || arg === '--report=true') {
+    report = true;
+  } else if (!arg.startsWith('-') && !filter) {
+    filter = arg;
+  }
+}
+
+runAll({ filter, providers, report }).catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
